@@ -10,21 +10,22 @@ struct Rom {
 
     Rom(std::istream& rom_stream);
 
-    void write_as_hex(std::ostream& out) {
-        for(size_t i = 0; i < rom_data.size(); ++i) {
-            if(i % 8 == 0 && i != 0) {
-                out << "\n";
-            }
-            out << std::hex << static_cast<int>(rom_data[i]) << " ";
-        }
-    }
+    void write_as_hex(std::ostream& out);
 };
-
 
 Rom::Rom(std::istream& rom_stream) {
     char data;
     while(rom_stream.get(data)) {
         this->rom_data.push_back(static_cast<Byte>(data));
+    }
+}
+
+void Rom::write_as_hex(std::ostream& out) {
+    for(size_t i = 0; i < rom_data.size(); ++i) {
+        if(i % 8 == 0 && i != 0) {
+            out << "\n";
+        }
+        out << std::hex << static_cast<int>(rom_data[i]) << " ";
     }
 }
 

@@ -21,11 +21,12 @@ Rom::Rom(std::istream& rom_stream) {
 }
 
 void Rom::write_as_hex(std::ostream& out) {
+    constexpr size_t newline_step = 1;
     for(size_t i = 0; i < rom_data.size(); ++i) {
-        if(i % 8 == 0 && i != 0) {
+        if(i % newline_step == 0 && i != 0) {
             out << "\n";
         }
-        out << std::hex << static_cast<int>(rom_data[i]) << " ";
+        out << std::hex << i << " " << static_cast<int>(rom_data[i]) << " ";
     }
 }
 

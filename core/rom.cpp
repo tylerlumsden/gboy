@@ -1,17 +1,6 @@
-#include <iostream>
 #include <fstream>
-#include <vector>
-#include <cstdint>
 
-using Byte = uint8_t;
-
-struct Rom {
-    std::vector<Byte> rom_data;
-
-    Rom(std::istream& rom_stream);
-
-    void write_as_hex(std::ostream& out);
-};
+#include "rom.hpp"
 
 Rom::Rom(std::istream& rom_stream) {
     char data;
@@ -28,12 +17,4 @@ void Rom::write_as_hex(std::ostream& out) {
         }
         out << std::hex << i << " " << static_cast<int>(rom_data[i]) << " ";
     }
-}
-
-int main() {
-    std::ifstream reader("pkmnblue.gb");
-    Rom pkmn_data(reader);
-
-    std::ofstream writer("pkmnblue.dat");
-    pkmn_data.write_as_hex(writer);
 }

@@ -2,11 +2,12 @@
 
 #include <iostream>
 #include <vector>
-#include <cstdint>
 
-using Byte = uint8_t;
+#include "data_types.hpp"
+
 struct Rom {
-    std::vector<Byte> rom_data;
+    // TODO: data perhaps should be a multiple of std::max<Address>
+    std::vector<Byte> data;
 
     Rom(std::istream& rom_stream);
 

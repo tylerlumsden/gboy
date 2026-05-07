@@ -5,4 +5,5 @@
 struct GameBoy {    
     Rom rom;
 
+    void run();
 };

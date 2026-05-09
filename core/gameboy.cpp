@@ -3,7 +3,6 @@
 #include "log.hpp"
 
 void GameBoy::run() {
-    // Should error if rom not inserted
     constexpr Address entry = 0x100;
 
     Log::log(R"(Entry point:      

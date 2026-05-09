@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "rom.hpp"
 
 Rom::Rom(std::istream& rom_stream) {

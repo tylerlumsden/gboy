@@ -4,12 +4,14 @@
 #include <array>
 #include <format>
 
-#include "gameboy.hpp"
+#include "memory.hpp"
 #include "data_types.hpp"
 
 namespace SM83 {
 
 struct CPU {
+
+    MemoryBus addressable_space;
 
     // Instruction Definitions
     using InstructionFunc = void (CPU::*)();

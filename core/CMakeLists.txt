@@ -1,6 +1,7 @@
 add_library(core STATIC
     gameboy.cpp
     rom.cpp
+    cpu.cpp
 )
 
 target_include_directories(core

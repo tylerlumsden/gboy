@@ -5,8 +5,11 @@
 #include <format>
 #include <functional>
 #include <stdexcept>
+#include <fstream>
 
 // TODO: need to differentiate between reads/writes
+// For example maybe implement separate read/write functions
+// Perhaps don't even make these function a member, just create it in the constructor
 Byte& GameBoy::memory_map(Address addr) {
     if(0x0 <= addr && addr <= 0x3FFF) {
         return this->rom.data[addr];
@@ -26,5 +29,7 @@ GameBoy::GameBoy(Rom rom) : rom(rom) {
 }
 
 void GameBoy::run() {
+    std::ofstream debug_output("resources/pkmnblue.dat");
+    rom.write_as_hex(debug_output);
     this->processor.fetch_decode_execute();
 }   

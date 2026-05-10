@@ -18,10 +18,13 @@ struct CPU {
     // on the checksum of the ROM. If this is an issue, we need to add logic for these
     bool half_carry_flag = 0x0;
     bool carry_flag = 0x0;
-    Double_Byte BC = 0xFF13;
-    Double_Byte DE = 0x00C1;
-    Double_Byte HL = 0x8403;
-    Double_Byte stack_pointer = 0xFFFE;
+    Byte B = 0xff;
+    Byte C = 0x13;
+    Byte D = 0x00;
+    Byte E = 0xc1;
+    Byte H = 0x84;
+    Byte L = 0x03;
+    Address stack_pointer = 0xFFFE;
     Address program_counter = 0x100;
 
     bool IME = 0x0;
@@ -49,11 +52,23 @@ struct CPU {
 
     void di();
 
+    template <Byte Opcode>
+    void ld();
+
     template<Byte Opcode>
     void swap();
 
     template<Byte Opcode>
     void rst();
+    
+    template<Byte Opcode>
+    void inc();
+
+    template<Byte Opcode>
+    void ret();
+
+    template<Byte Opcode>
+    void ldh();
 
     static constexpr std::array<InstructionFunc, 256> instruction_handler = [](){
         // Default initialize the handler array with all instructions not implemented
@@ -69,8 +84,13 @@ struct CPU {
         handler[0xaf] = &CPU::x_or<0xaf>;
         handler[0x18] = &CPU::jr<0x18>;
         handler[0xf3] = &CPU::di;
-        handler[0x31] = &CPU::swap<0x31>;
+        handler[0x31] = &CPU::ld<0x31>;
         handler[0xff] = &CPU::rst<0xff>;
+        handler[0x3c] = &CPU::inc<0x3c>;
+        handler[0xc9] = &CPU::ret<0xc9>;
+        handler[0xea] = &CPU::ld<0xea>;
+        handler[0x3e] = &CPU::ld<0x3e>;
+        handler[0xe0] = &CPU::ldh<0xe0>;
 
         // Initialize each instruction manually here
 

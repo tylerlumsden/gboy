@@ -5,10 +5,9 @@
 #include "data_types.hpp"
 
 struct GameBoy { 
-    std::array<Byte, 0x2000> wram;
-    std::array<Byte, 0x7F> hram;
-
     Rom rom;
+    std::array<Byte, 0xc000> memory_map;
+
     SM83::CPU processor;
 
     void run();

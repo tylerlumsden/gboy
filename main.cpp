@@ -3,9 +3,9 @@
 #include "gameboy.hpp"
 
 int main() {
-    std::ifstream reader("resources/pkmnblue.gb");
-    Rom pkmn_data(reader);
+    std::ifstream reader("resources/cpu_instrs.gb");
+    Rom rom(reader);
 
-    GameBoy device(pkmn_data);
+    GameBoy device(rom);
     device.run();
 }

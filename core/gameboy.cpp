@@ -5,31 +5,44 @@
 #include <format>
 #include <functional>
 #include <stdexcept>
-#include <fstream>
-
-// TODO: need to differentiate between reads/writes
-// For example maybe implement separate read/write functions
-// Perhaps don't even make these function a member, just create it in the constructor
-Byte& GameBoy::memory_map(Address addr) {
-    if(0x0 <= addr && addr <= 0x3FFF) {
-        return this->rom.data[addr];
-    } else {
-        throw std::logic_error(std::format(
-            "Attempted to access address {}. This address is either unimplemented or out of range.\n", addr
-        ));
-    }   
-}
 
 GameBoy::GameBoy(Rom rom) : rom(rom) {
-    MemoryBus addressable_space([this](Address addr) -> Byte& {
-        return this->memory_map(addr);
-    });
+    auto memory_write = [this](Address addr, Byte data) {
+        if(0x0 <= addr && addr <= 0x3fff) {
+            throw std::logic_error(std::format(
+                "Attempted to write to ROM address {}\n", addr
+            ));
+        } else if(0xc000 <= addr && addr <= 0xdfff) {
+            this->wram[addr - 0xc000] = data;
+            return;
+        } else if(0xff80 <= addr && addr <= 0xfffe) {
+            this->hram[addr - 0xff80] = data;
+            return;
+        } else {
+            throw std::logic_error(std::format(
+                "Attempted to write to address {}. This address is either unimplemented or out of range.\n", addr
+            ));
+        }
+    };
 
+    auto memory_read = [this](Address addr) -> const Byte& {
+        if(0x0 <= addr && addr <= 0x3fff) {
+            return this->rom.data[addr];
+        } else if(0xc000 <= addr && addr <= 0xdfff) {
+            return this->wram[addr - 0xc000];
+        } else if(0xff80 <= addr && addr <= 0xfffe) {
+            return this->hram[addr - 0xff80];
+        } else {
+            throw std::logic_error(std::format(
+                "Attempted to read address {}. This address is either unimplemented or out of range.\n", addr
+            ));
+        }   
+    };
+
+    MemoryBus addressable_space{memory_write, memory_read};
     this->processor.addressable_space = addressable_space;
 }
 
 void GameBoy::run() {
-    std::ofstream debug_output("resources/pkmnblue.dat");
-    rom.write_as_hex(debug_output);
     this->processor.fetch_decode_execute();
 }   

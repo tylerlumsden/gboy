@@ -4,9 +4,6 @@
 #include "data_types.hpp"
 
 struct MemoryBus {
-    std::function<Byte&(Address)> address_func;
-
-    Byte& operator[](Address addr) {
-        return address_func(addr);
-    }
+    std::function<void(Address, Byte)> write;
+    std::function<const Byte&(Address)> read;
 };

@@ -5,11 +5,13 @@
 #include "data_types.hpp"
 
 struct GameBoy { 
+    std::array<Byte, 0x2000> wram;
+    std::array<Byte, 0x7F> hram;
+
     Rom rom;
     SM83::CPU processor;
 
     void run();
-    Byte& memory_map(Address addr);
 
     GameBoy(Rom rom);
     GameBoy() = delete; 

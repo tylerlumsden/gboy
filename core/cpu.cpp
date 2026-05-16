@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "cpu.hpp"  
 #include "data_types.hpp"
 #include "log.hpp"
@@ -66,15 +68,193 @@ void SM83::CPU::di() {
     this->IME = false;
 }
 
+template<Byte Opcode>
+void SM83::CPU::ld_register() {
+    auto register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
+        if constexpr(Regcode == 0b000) return static_cast<Byte&>(this->B);
+        else if constexpr(Regcode == 0b001) return static_cast<Byte&>(this->C);
+        else if constexpr(Regcode == 0b010) return static_cast<Byte&>(this->D);
+        else if constexpr(Regcode == 0b011) return static_cast<Byte&>(this->E);
+        else if constexpr(Regcode == 0b100) return static_cast<Byte&>(this->H);
+        else if constexpr(Regcode == 0b101) return static_cast<Byte&>(this->L);
+        else if constexpr(Regcode == 0b110) return this->addressable_space[splice(this->H, this->L)];
+        else if constexpr(Regcode == 0b111) return static_cast<Byte&>(this->A);
+    };
+
+    constexpr Byte DestCode = (Opcode & 0b00111000) >> 3;
+    constexpr Byte SourceCode = (Opcode & 0b00000111);
+
+    register_mapping.template operator()<DestCode>() = register_mapping.template operator()<SourceCode>();
+}
+
+template<Byte Opcode> 
+    requires is_one_of<Opcode, 0x01, 0x11, 0x21, 0x31>
+void SM83::CPU::ld_n16() {
+    Byte low = this->fetch();
+    Byte high = this->fetch();
+
+    if constexpr(Opcode == 0x31) {
+        this->stack_pointer = splice(high, low);
+    } else {
+        auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
+            if constexpr(Opcode == 0x01) return {this->B, this->C};
+            else if constexpr(Opcode == 0x11) return {this->D, this->E};
+            else if constexpr(Opcode == 0x21) return {this->H, this->L};
+        }();
+
+        high_byte = high; low_byte = low;
+    }
+}
+
 // TODO: implement variants
 template<Byte Opcode> 
 void SM83::CPU::ld() {
-    if constexpr(Opcode == 0x31) {
+    // Load an n16
+    if constexpr(Opcode == 0x01) {
+        Byte low_byte = this->fetch();
+        Byte high_byte = this->fetch();
+
+        this->B = high_byte;
+        this->C = low_byte;
+    }
+    else if constexpr(Opcode == 0x06) {
+        Byte data = this->fetch();
+
+        this->B = data;
+    }
+    else if constexpr(Opcode == 0x08) {
+        Byte low_byte = this->fetch();
+        Byte high_byte = this->fetch();
+
+        this->addressable_space.write(
+            splice(high_byte, low_byte),
+            this->stack_pointer
+        );
+    }
+    else if constexpr(Opcode == 0x0a) {
+        Byte data = this->addressable_space.read(
+            splice(this->B, this->C)
+        );
+
+        this->A = data;
+    }
+    else if constexpr(Opcode == 0x0e) {
+        Byte data = this->fetch();
+
+        this->C = data;
+    }
+    else if constexpr(Opcode == 0x11) {
+        Byte low_byte = this->fetch();
+        Byte high_byte = this->fetch();
+
+        this->D = high_byte;
+        this->E = low_byte;
+    }
+    else if constexpr(Opcode == 0x12) {
+        Address addr = splice(this->D, this->E);
+        
+        this->addressable_space.write(addr, this->A);
+    }
+    else if constexpr(Opcode == 0x16) {
+        Byte data = this->fetch();
+
+        this->D = data;
+    }
+    else if constexpr(Opcode == 0x1a) {
+        Byte data = this->addressable_space.read(
+            splice(this->D, this->E)
+        );
+
+        this->A = data;
+    }
+    else if constexpr(Opcode == 0x1e) {
+        Byte data = this->fetch();
+
+        this->E = data;
+    }
+    else if constexpr(Opcode == 0x21) {
+        Byte low_byte = this->fetch();
+        Byte high_byte = this->fetch();
+
+        this->H = high_byte;
+        this->L = low_byte;
+    }
+    else if constexpr(Opcode == 0x22) {
+        Double_Byte HL = splice(this->H, this->L);
+        this->addressable_space.write(HL, this->A);
+        ++HL;
+
+        this->H = hi(HL);
+        this->L = lo(HL);
+    }
+    else if constexpr(Opcode == 0x26) {
+        Byte data = fetch();
+
+        this->H = data;
+    }
+    else if constexpr(Opcode == 0x2a) {
+        Double_Byte HL = splice(this->H, this->L);
+        this->A = addressable_space.read(HL);
+
+        ++HL;
+        this->H = hi(HL);
+        this->L = lo(HL);
+    }
+    else if constexpr(Opcode == 0x2e) {
+        Byte data = fetch();
+
+        this->L = data;
+    }
+    else if constexpr(Opcode == 0x31) {
         Byte low_byte = this->fetch();
         Byte high_byte = this->fetch();
 
         this->stack_pointer = splice(high_byte, low_byte);
-    } else if constexpr(Opcode == 0xea) {
+    } 
+    else if constexpr(Opcode == 0x32) {
+        Double_Byte HL = splice(this->H, this->L);
+        this->addressable_space.write(HL, this->A);
+
+        --HL;
+        this->H = hi(HL);
+        this->L = lo(HL);
+    }
+    else if constexpr(Opcode == 0x36) {
+        Double_Byte HL = splice(this->H, this->L);
+        Byte data = fetch();
+
+        this->addressable_space.write(HL, data);
+    }
+    else if constexpr(Opcode == 0x3a) {
+        Double_Byte HL = splice(this->H, this->L);
+        this->A = this->addressable_space.read(HL);
+
+        --HL;
+        this->H = hi(HL);
+        this->L = lo(HL);
+    }
+    else if constexpr(Opcode == 0x3e) {
+        Byte data = fetch();
+
+        this->A = data;
+    }
+    else if constexpr(Opcode == 0x40) {
+        // no-op, assigns B to itself
+    }
+    else if constexpr(Opcode == 0x41) {
+        this->B = this->C;
+    }
+    else if constexpr(Opcode == 0x42) {
+        this->B = this->D;
+    }
+    else if constexpr(Opcode == 0x43) {
+        this->B = this->E;
+    }
+    else if constexpr(Opcode == 0x44) {
+
+    }
+
+    else if constexpr(Opcode == 0xea) {
         Byte low_byte = this->fetch();
         Byte high_byte = this->fetch();
 
@@ -129,14 +309,7 @@ void SM83::CPU::inc() {
 // TODO: implement variants
 template<Byte Opcode>
 void SM83::CPU::ret() {
-    // Pop an address from the stack
-    ++this->stack_pointer;
-    Byte low_byte = this->addressable_space.read(this->stack_pointer);
-    ++this->stack_pointer;
-    Byte high_byte = this->addressable_space.read(this->stack_pointer);
-
-    // Set the program counter to the popped address
-    this->program_counter = splice(high_byte, low_byte);
+    this->pop_program_counter();
 }
 
 
@@ -151,4 +324,50 @@ void SM83::CPU::ldh() {
 
         this->addressable_space.write(addr, this->A);
     }
+}
+
+void SM83::CPU::push_program_counter() {
+    Byte high = hi(this->program_counter);
+    Byte low = lo(this->program_counter);
+
+    this->addressable_space[this->stack_pointer] = high;
+    --this->stack_pointer;
+
+    this->addressable_space[this->stack_pointer] = low;
+    --this->stack_pointer;
+}
+
+void SM83::CPU::pop_program_counter() {
+    ++this->stack_pointer;
+    Byte low = this->addressable_space[this->stack_pointer];
+
+    ++this->stack_pointer;
+    Byte high = this->addressable_space[this->stack_pointer];
+
+    this->program_counter = splice(high, low);
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
+void SM83::CPU::call() {
+    if constexpr(Opcode == 0xc4) {
+        if(this->zero_flag) return;
+    } 
+    else if constexpr(Opcode == 0xd4) {
+        if(this->carry_flag) return;
+    }
+    else if constexpr(Opcode == 0xcc) {
+        if(!this->zero_flag) return;
+    }
+    else if constexpr(Opcode == 0xdc) {
+        if(!this->carry_flag) return;
+    }
+
+    Byte low_byte = this->fetch();
+    Byte high_byte = this->fetch();
+
+    Address subroutine = splice(high_byte, low_byte);
+
+    this->push_program_counter();
+    this->program_counter = subroutine;
 }

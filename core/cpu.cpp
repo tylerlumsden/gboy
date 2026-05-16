@@ -309,7 +309,8 @@ void SM83::CPU::inc() {
 // TODO: implement variants
 template<Byte Opcode>
 void SM83::CPU::ret() {
-    this->pop_program_counter();
+    this->pop();
+    this->program_counter = this->pop();
 }
 
 
@@ -326,9 +327,9 @@ void SM83::CPU::ldh() {
     }
 }
 
-void SM83::CPU::push_program_counter() {
-    Byte high = hi(this->program_counter);
-    Byte low = lo(this->program_counter);
+void SM83::CPU::push(Double_Byte data) {
+    Byte high = hi(data);
+    Byte low = lo(data);
 
     this->addressable_space[this->stack_pointer] = high;
     --this->stack_pointer;
@@ -337,14 +338,14 @@ void SM83::CPU::push_program_counter() {
     --this->stack_pointer;
 }
 
-void SM83::CPU::pop_program_counter() {
+Double_Byte SM83::CPU::pop() {
     ++this->stack_pointer;
     Byte low = this->addressable_space[this->stack_pointer];
 
     ++this->stack_pointer;
     Byte high = this->addressable_space[this->stack_pointer];
 
-    this->program_counter = splice(high, low);
+    return splice(high, low);
 }
 
 template<Byte Opcode>
@@ -368,6 +369,23 @@ void SM83::CPU::call() {
 
     Address subroutine = splice(high_byte, low_byte);
 
-    this->push_program_counter();
+    this->push(this->program_counter);
     this->program_counter = subroutine;
+}
+
+Byte SM83::CPU::flags_as_byte() {
+    return 0x0;
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0xc5, 0xd5, 0xe5, 0xf5>
+void SM83::CPU::push_register() {
+    Double_Byte push_data = [&]() {
+        if constexpr(Opcode == 0xc5) return splice(this->B, this->C);
+        else if constexpr(Opcode == 0xd5) return splice(this->D, this->E);
+        else if constexpr(Opcode == 0xe5) return splice(this->H, this->L);
+        else if constexpr(Opcode == 0xf5) return splice(this->A, this->flags_as_byte());
+    }();
+
+    this->push(push_data);
 }

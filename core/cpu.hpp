@@ -36,8 +36,10 @@ struct CPU {
     Byte fetch();
     void fetch_decode_execute();
 
-    void push_program_counter();
-    void pop_program_counter();
+    void push(Double_Byte data);
+    Double_Byte pop();
+
+    Byte flags_as_byte();
 
     // Instruction Definitions
     using InstructionFunc = void (CPU::*)();
@@ -87,6 +89,10 @@ struct CPU {
         requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
     void call();
 
+    template<Byte Opcode>
+        requires is_one_of<Opcode, 0xc5, 0xd5, 0xe5, 0xf5>
+    void push_register();
+
     static constexpr std::array<InstructionFunc, 256> instruction_handler = [](){
         // Default initialize the handler array with all instructions not implemented
         std::array<InstructionFunc, 256> handler = 
@@ -121,6 +127,12 @@ struct CPU {
         handler[0x11] = &CPU::ld_n16<0x11>;
         handler[0x21] = &CPU::ld_n16<0x21>;
         handler[0x31] = &CPU::ld_n16<0x31>;
+
+        // push_register
+        handler[0xc5] = &CPU::push_register<0xc5>;
+        handler[0xd5] = &CPU::push_register<0xd5>;
+        handler[0xe5] = &CPU::push_register<0xe5>;
+        handler[0xf5] = &CPU::push_register<0xf5>;
 
         // ld_register
         handler[0x40] = &CPU::ld_register<0x40>;

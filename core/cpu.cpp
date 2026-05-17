@@ -455,9 +455,9 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
 
 void SM83::CPU::fetch_decode_execute() {
     while(true) {
-        Log::log("Address {:#x}, ", this->program_counter);
+        Log::log<Log::Level::Debug>("Address {:#x}, ", this->program_counter);
         Byte next_instruction = fetch(this);
-        Log::log("current instruction: {:#x}\n", next_instruction);
+        Log::log<Log::Level::Debug>("current instruction: {:#x}\n", next_instruction);
 
         std::invoke(instruction_handler[next_instruction], this);
     }

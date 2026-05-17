@@ -55,11 +55,13 @@ static void no_impl(SM83::CPU* cpu) {
 }
 
 static void nop(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing nop {:#x}", 0x00);
     // Should use 4 cycles
-} 
+}
 
 // TODO: implement variants
 static void jp(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing jp {:#x}", 0xc3);
     Byte low_byte = fetch(cpu);
     Byte high_byte = fetch(cpu);
 
@@ -68,6 +70,7 @@ static void jp(SM83::CPU* cpu) {
 
 // TODO: implement variants
 static void cp(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing cp {:#x}", 0xfe);
     Byte num = fetch(cpu);
 
     cpu->zero_flag = (num == cpu->A);
@@ -79,6 +82,7 @@ static void cp(SM83::CPU* cpu) {
 // TODO: implement variants
 template<Byte Opcode>
 static void jr(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing jr {:#x}", Opcode);
     Signed_Byte relative_address = fetch(cpu);
     if constexpr(Opcode == 0x28) {
         if(!cpu->zero_flag) return;
@@ -90,18 +94,21 @@ static void jr(SM83::CPU* cpu) {
 // TODO: implement variants
 template<Byte Opcode>
 static void x_or(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing x_or {:#x}", Opcode);
     if constexpr(Opcode == 0xaf) {
         cpu->A = cpu->A ^ cpu->A;
     }
 }
 
 static void di(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing di {:#x}", 0xf3);
     cpu->IME = false;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x02, 0x0a, 0x12, 0x1a, 0x22, 0x2a, 0x32, 0x3a>
 static void ld_address_a(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing ld_address_a {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0xf0);
     Address address = [&]() {
         if constexpr(addr_type == 0x00) return splice(cpu->B, cpu->C);
@@ -134,6 +141,7 @@ static void ld_address_a(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xe0, 0xe2, 0xea, 0xf0, 0xf2, 0xfa>
 static void ld_address_a_misc(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing ld_address_a_misc {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0x0f);
     Address address = [&]() {
         if constexpr(addr_type == 0x00) {
@@ -164,6 +172,7 @@ static void ld_address_a_misc(SM83::CPU* cpu) {
 
 template<Byte Opcode>
 static void ld_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing ld_register {:#x}", Opcode);
     auto register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
         if constexpr(Regcode == 0b000) return static_cast<Byte&>(cpu->B);
         else if constexpr(Regcode == 0b001) return static_cast<Byte&>(cpu->C);
@@ -184,6 +193,7 @@ static void ld_register(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>
 static void ld_n8(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing ld_n8 {:#x}", Opcode);
     auto load_dest = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x06) return static_cast<Byte&>(cpu->B);
         if constexpr(Opcode == 0x0e) return static_cast<Byte&>(cpu->C);
@@ -201,6 +211,7 @@ static void ld_n8(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x01, 0x11, 0x21, 0x31>
 static void ld_n16(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing ld_n16 {:#x}", Opcode);
     Byte low = fetch(cpu);
     Byte high = fetch(cpu);
 
@@ -221,6 +232,7 @@ static void ld_n16(SM83::CPU* cpu) {
 // TODO: implement variants
 template<Byte Opcode>
 static void swap(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing swap {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
         if constexpr(Opcode == 0x31) return cpu->A;
     }();
@@ -233,6 +245,7 @@ static void swap(SM83::CPU* cpu) {
 // TODO: implement variants
 template<Byte Opcode>
 static void rst(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing rst {:#x}", Opcode);
     Byte high_byte = hi(cpu->program_counter);
     Byte low_byte = lo(cpu->program_counter);
     cpu->addressable_space.write(cpu->stack_pointer, high_byte);
@@ -248,6 +261,7 @@ static void rst(SM83::CPU* cpu) {
 // TODO: implement variants
 template<Byte Opcode>
 static void inc(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing inc {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
         if constexpr(Opcode == 0x3c) return cpu->A;
     }();
@@ -258,13 +272,15 @@ static void inc(SM83::CPU* cpu) {
 // TODO: implement variants
 template<Byte Opcode>
 static void ret(SM83::CPU* cpu) {
-    pop(cpu);
+    Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
+
     cpu->program_counter = pop(cpu);
 }
 
 // TODO: implement variants
 template<Byte Opcode>
 static void ldh(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing ldh {:#x}", Opcode);
     if constexpr(Opcode == 0xe0) {
         Byte low_byte = fetch(cpu);
         Byte high_byte = 0xff;
@@ -279,6 +295,7 @@ static void ldh(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
 static void call(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing call {:#x}", Opcode);
     if constexpr(Opcode == 0xc4) {
         if(cpu->zero_flag) return;
     }
@@ -304,6 +321,7 @@ static void call(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc5, 0xd5, 0xe5, 0xf5>
 static void push_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing push_register {:#x}", Opcode);
     Double_Byte push_data = [&]() {
         if constexpr(Opcode == 0xc5) return splice(cpu->B, cpu->C);
         else if constexpr(Opcode == 0xd5) return splice(cpu->D, cpu->E);
@@ -459,5 +477,6 @@ void SM83::CPU::fetch_decode_execute() {
         Byte next_instruction = fetch(this);
 
         std::invoke(instruction_handler[next_instruction], this);
+        Log::log<Log::Level::Debug>("End instruction loop\n");
     }
 }

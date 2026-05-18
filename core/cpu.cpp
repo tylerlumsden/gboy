@@ -462,24 +462,31 @@ void inc_single_register(SM83::CPU* cpu) {
 }
 
 template<Byte Opcode>
-    requires ( 0x80 <= Opcode && Opcode <= 0xbf )
+    requires ( 
+        (0x80 <= Opcode && Opcode <= 0xbf) ||
+        is_one_of<Opcode, 0xc6, 0xd6, 0xe6, 0xf6, 0xce, 0xde, 0xee, 0xfe>
+    )
 void arithmetic_register(SM83::CPU* cpu) {
     Log::log<Log::Level::Debug>("Executing arithmetic_register {:#x}", Opcode);
-    auto data = [&]() -> decltype(auto) {
+    Byte data = [&]() {
+        // Additional n8 arithmetic instructions
+        if constexpr((Opcode & 0xf0) > 0xb0) return fetch(cpu);
+
+        // Standard register arithmetic instructions
         constexpr Byte RegCode = ((Opcode & 0x0f) % 0x08);
-        if constexpr(RegCode == 0x00) return static_cast<Byte&>(cpu->B);
-        else if constexpr(RegCode == 0x01) return static_cast<Byte&>(cpu->C);
-        else if constexpr(RegCode == 0x02) return static_cast<Byte&>(cpu->D);
-        else if constexpr(RegCode == 0x03) return static_cast<Byte&>(cpu->E);
-        else if constexpr(RegCode == 0x04) return static_cast<Byte&>(cpu->H);
-        else if constexpr(RegCode == 0x05) return static_cast<Byte&>(cpu->L);
-        else if constexpr(RegCode == 0x06) return cpu->addressable_space[splice(cpu->H, cpu->L)];
+        if constexpr(RegCode == 0x00) return cpu->B;
+        else if constexpr(RegCode == 0x01) return cpu->C;
+        else if constexpr(RegCode == 0x02) return cpu->D;
+        else if constexpr(RegCode == 0x03) return cpu->E;
+        else if constexpr(RegCode == 0x04) return cpu->H;
+        else if constexpr(RegCode == 0x05) return cpu->L;
+        else if constexpr(RegCode == 0x06) return static_cast<Byte>(cpu->addressable_space[splice(cpu->H, cpu->L)]);
         else if constexpr(RegCode == 0x07) return cpu->A;
     }();
 
-    constexpr Byte instruction_col = (Opcode & 0x0f) / 8;
-    constexpr Byte instruction_row = (Opcode & 0xf0);
-    if constexpr(instruction_row == 0x80 && instruction_col == 0x00) {
+    constexpr Byte instruction_col = (Opcode & 0x0f) / 0x08;
+    constexpr Byte instruction_row = (Opcode & 0xf0) % 0x40;
+    if constexpr(instruction_row == 0x00 && instruction_col == 0x00) {
         cpu->half_carry_flag = half_carry_add(cpu->A, data);
         cpu->carry_flag = carry_add(cpu->A, data);
 
@@ -488,7 +495,7 @@ void arithmetic_register(SM83::CPU* cpu) {
         cpu->zero_flag = (cpu->A == 0);
         cpu->subtraction_flag = false;
     }
-    else if constexpr(instruction_row == 0x80 && instruction_col == 0x01) {
+    else if constexpr(instruction_row == 0x00 && instruction_col == 0x01) {
         cpu->carry_flag = carry_add(cpu->A, data, cpu->carry_flag);
         cpu->half_carry_flag = half_carry_add(cpu->A, data, cpu->carry_flag);
 
@@ -497,7 +504,7 @@ void arithmetic_register(SM83::CPU* cpu) {
         cpu->zero_flag = (cpu->A == 0);
         cpu->subtraction_flag = false;
     }
-    else if constexpr(instruction_row == 0x90 && instruction_col == 0x00) {
+    else if constexpr(instruction_row == 0x10 && instruction_col == 0x00) {
         cpu->carry_flag = carry_sub(cpu->A, data);
         cpu->half_carry_flag = half_carry_sub(cpu->A, data);
 
@@ -506,7 +513,7 @@ void arithmetic_register(SM83::CPU* cpu) {
         cpu->zero_flag = (cpu->A == 0); 
         cpu->subtraction_flag = true;
     }
-    else if constexpr(instruction_row == 0x90 && instruction_col == 0x01) {
+    else if constexpr(instruction_row == 0x10 && instruction_col == 0x01) {
         cpu->carry_flag = carry_sub(cpu->A, data, cpu->carry_flag);
         cpu->half_carry_flag = half_carry_sub(cpu->A, data, cpu->carry_flag);
 
@@ -515,21 +522,33 @@ void arithmetic_register(SM83::CPU* cpu) {
         cpu->zero_flag = (cpu->A == 0);
         cpu->subtraction_flag = true;
     }
-    else if constexpr(instruction_row == 0xa0 && instruction_col == 0x00) {
+    else if constexpr(instruction_row == 0x20 && instruction_col == 0x00) {
         cpu->A = cpu->A & data;
     }
-    else if constexpr(instruction_row == 0xa0 && instruction_col == 0x01) {
+    else if constexpr(instruction_row == 0x20 && instruction_col == 0x01) {
         cpu->A = cpu->A ^ data;
     }
-    else if constexpr(instruction_row == 0xb0 && instruction_col == 0x00) {
+    else if constexpr(instruction_row == 0x30 && instruction_col == 0x00) {
         cpu->A = cpu->A | data;
     }
-    else if constexpr(instruction_row == 0xb0 && instruction_col == 0x01) {
+    else if constexpr(instruction_row == 0x30 && instruction_col == 0x01) {
         cpu->zero_flag = (cpu->A == data);
         cpu->subtraction_flag = true;
         cpu->half_carry_flag = half_carry_sub(cpu->A, data);
         cpu->carry_flag = carry_sub(cpu->A, data);
     }
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0x07, 0x17>
+void rotate_left(SM83::CPU* cpu) {
+    Byte most_significant_bit = (cpu->A >> 7);
+    // Circular rotate
+    if constexpr(Opcode == 0x07) cpu->A = (cpu->A << 8) | (most_significant_bit);
+    // Rotate through carry flag
+    else if constexpr(Opcode == 0x17) cpu->A = (cpu->A << 8) | (cpu->carry_flag);
+
+    cpu->carry_flag = most_significant_bit;
 }
 
 // --- Dispatch table ---
@@ -691,6 +710,20 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0xbd] = &arithmetic_register<0xbd>;
     handler[0xbe] = &arithmetic_register<0xbe>;
     handler[0xbf] = &arithmetic_register<0xbf>;
+
+    // Additional n8 arithmetic register
+    handler[0xc6] = &arithmetic_register<0xc6>;
+    handler[0xd6] = &arithmetic_register<0xd6>;
+    handler[0xe6] = &arithmetic_register<0xe6>;
+    handler[0xf6] = &arithmetic_register<0xf6>;
+    handler[0xce] = &arithmetic_register<0xce>;
+    handler[0xde] = &arithmetic_register<0xde>;
+    handler[0xee] = &arithmetic_register<0xee>;
+    handler[0xfe] = &arithmetic_register<0xfe>;
+
+    // Rotate
+    handler[0x07] = &rotate_left<0x07>;
+    handler[0x17] = &rotate_left<0x17>;
 
     // ld_register
     handler[0x40] = &ld_register<0x40>;

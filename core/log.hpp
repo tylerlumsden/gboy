@@ -1,7 +1,7 @@
 #pragma once
 
 #include <format>
-#include <iostream>
+#include <fstream>
 
 namespace Log {
 
@@ -20,11 +20,20 @@ constexpr auto log_level_string(Level log_level) {
     }
 }
 
+struct Logger {
+    template<Level LogLevel>
+    static std::ofstream& get_logger() {
+        static std::ofstream log_file(std::format("{}.log", log_level_string(LogLevel)));
+        return log_file;
+    }
+};
+
 template<Level LogLevel, typename... Args>
 void log(std::format_string<Args...> info, Args&&... args) {
+    auto& log = Logger::get_logger<LogLevel>();
     if constexpr(LogLevel >= LOG_LEVEL) {
         std::string message = std::format(info, std::forward<Args>(args)...);
-        std::cout << std::format("{}: {}\n", log_level_string(LogLevel), message);
+        log << std::format("{}: {}\n", log_level_string(LogLevel), message);
     }
 }
 

@@ -9,6 +9,58 @@
 
 // --- Utilities ---
 
+template <std::convertible_to<Byte>... Operands>
+static bool half_carry_add(Byte a, Operands... operands) {
+    std::array<Byte, sizeof...(operands)> operand_array{operands...};
+    Byte running_sum = a;
+    for(Byte operand : operand_array) {
+        if((running_sum & 0x0f) + (operand & 0x0f) > 0x0f) {
+            return true;
+        }
+        running_sum += operand;
+    }
+    return false;
+}
+
+template <std::convertible_to<Byte>... Operands>
+static bool carry_add(Byte a, Operands... operands) {
+    std::array<Byte, sizeof...(operands)> operand_array{operands...};
+    Byte running_sum = a;
+    for(Byte operand : operand_array) {
+        if(running_sum + operand < running_sum) {
+            return true;
+        }
+        running_sum += operand;
+    }
+    return false;
+}
+
+template <std::convertible_to<Byte>... Operands>
+static bool half_carry_sub(Byte a, Operands... operands) {
+    std::array<Byte, sizeof...(operands)> operand_array{operands...};
+    Byte running_sum = a;
+    for(Byte operand : operand_array) {
+        if((running_sum & 0x0f) < (operand & 0x0f)) {
+            return true;
+        }
+        running_sum -= operand;
+    }
+    return false;
+}
+
+template <std::convertible_to<Byte>... Operands>
+static bool carry_sub(Byte a, Operands... operands) {
+    std::array<Byte, sizeof...(operands)> operand_array{operands...};
+    Byte running_sum = a;
+    for(Byte operand : operand_array) {
+        if(running_sum < operand) {
+            return true;
+        }
+        running_sum -= operand;
+    }
+    return false;
+}
+
 static Byte flags_as_byte(SM83::CPU* cpu) {
     Byte flags = 0x0;
     flags |= (cpu->carry_flag << 4);
@@ -76,8 +128,8 @@ static void jp(SM83::CPU* cpu) {
 }
 
 // TODO: implement variants
-static void cp(SM83::CPU* cpu) {
-    Log::log<Log::Level::Debug>("Executing cp {:#x}", 0xfe);
+static void cp_n8(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing cp_n8 {:#x}", 0xfe);
     Byte num = fetch(cpu);
 
     cpu->zero_flag = (num == cpu->A);
@@ -366,6 +418,7 @@ void pop_register(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x03, 0x13, 0x23>
 void inc_double_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing inc_double_register {:#x}", Opcode);
     auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
         if constexpr(Opcode == 0x03) return {cpu->B, cpu->C};
         else if constexpr(Opcode == 0x13) return {cpu->D, cpu->E};
@@ -381,13 +434,15 @@ void inc_double_register(SM83::CPU* cpu) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x33>
 void inc_sp(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing inc_sp {:#x}", Opcode);
     ++cpu->stack_pointer;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c>
 void inc_single_register(SM83::CPU* cpu) {
-    auto reg = [&]() -> decltype(auto) {
+    Log::log<Log::Level::Debug>("Executing inc_single_register {:#x}", Opcode);
+    auto data = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x04) return static_cast<Byte&>(cpu->B);
         else if constexpr(Opcode == 0x14) return static_cast<Byte&>(cpu->D);
         else if constexpr(Opcode == 0x24) return static_cast<Byte&>(cpu->H);
@@ -398,12 +453,83 @@ void inc_single_register(SM83::CPU* cpu) {
         else if constexpr(Opcode == 0x3c) return static_cast<Byte&>(cpu->A);
     }();
 
-    cpu->half_carry_flag = ((reg & 0x0f) == 0x0f);
+    cpu->half_carry_flag = ((data & 0x0f) == 0x0f);
 
-    reg = reg + 1;
+    data = data + 1;
 
-    cpu->zero_flag = (reg == 0);
+    cpu->zero_flag = (data == 0);
     cpu->subtraction_flag = false;
+}
+
+template<Byte Opcode>
+    requires ( 0x80 <= Opcode && Opcode <= 0xbf )
+void arithmetic_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing arithmetic_register {:#x}", Opcode);
+    auto data = [&]() -> decltype(auto) {
+        constexpr Byte RegCode = ((Opcode & 0x0f) % 0x08);
+        if constexpr(RegCode == 0x00) return static_cast<Byte&>(cpu->B);
+        else if constexpr(RegCode == 0x01) return static_cast<Byte&>(cpu->C);
+        else if constexpr(RegCode == 0x02) return static_cast<Byte&>(cpu->D);
+        else if constexpr(RegCode == 0x03) return static_cast<Byte&>(cpu->E);
+        else if constexpr(RegCode == 0x04) return static_cast<Byte&>(cpu->H);
+        else if constexpr(RegCode == 0x05) return static_cast<Byte&>(cpu->L);
+        else if constexpr(RegCode == 0x06) return cpu->addressable_space[splice(cpu->H, cpu->L)];
+        else if constexpr(RegCode == 0x07) return cpu->A;
+    }();
+
+    constexpr Byte instruction_col = (Opcode & 0x0f) / 8;
+    constexpr Byte instruction_row = (Opcode & 0xf0);
+    if constexpr(instruction_row == 0x80 && instruction_col == 0x00) {
+        cpu->half_carry_flag = half_carry_add(cpu->A, data);
+        cpu->carry_flag = carry_add(cpu->A, data);
+
+        cpu->A = cpu->A + data;
+
+        cpu->zero_flag = (cpu->A == 0);
+        cpu->subtraction_flag = false;
+    }
+    else if constexpr(instruction_row == 0x80 && instruction_col == 0x01) {
+        cpu->carry_flag = carry_add(cpu->A, data, cpu->carry_flag);
+        cpu->half_carry_flag = half_carry_add(cpu->A, data, cpu->carry_flag);
+
+        cpu->A = cpu->A + data + cpu->carry_flag;
+
+        cpu->zero_flag = (cpu->A == 0);
+        cpu->subtraction_flag = false;
+    }
+    else if constexpr(instruction_row == 0x90 && instruction_col == 0x00) {
+        cpu->carry_flag = carry_sub(cpu->A, data);
+        cpu->half_carry_flag = half_carry_sub(cpu->A, data);
+
+        cpu->A = cpu->A - data;
+
+        cpu->zero_flag = (cpu->A == 0); 
+        cpu->subtraction_flag = true;
+    }
+    else if constexpr(instruction_row == 0x90 && instruction_col == 0x01) {
+        cpu->carry_flag = carry_sub(cpu->A, data, cpu->carry_flag);
+        cpu->half_carry_flag = half_carry_sub(cpu->A, data, cpu->carry_flag);
+
+        cpu->A = cpu->A - data - cpu->carry_flag;
+
+        cpu->zero_flag = (cpu->A == 0);
+        cpu->subtraction_flag = true;
+    }
+    else if constexpr(instruction_row == 0xa0 && instruction_col == 0x00) {
+        cpu->A = cpu->A & data;
+    }
+    else if constexpr(instruction_row == 0xa0 && instruction_col == 0x01) {
+        cpu->A = cpu->A ^ data;
+    }
+    else if constexpr(instruction_row == 0xb0 && instruction_col == 0x00) {
+        cpu->A = cpu->A | data;
+    }
+    else if constexpr(instruction_row == 0xb0 && instruction_col == 0x01) {
+        cpu->zero_flag = (cpu->A == data);
+        cpu->subtraction_flag = true;
+        cpu->half_carry_flag = half_carry_sub(cpu->A, data);
+        cpu->carry_flag = carry_sub(cpu->A, data);
+    }
 }
 
 // --- Dispatch table ---
@@ -418,7 +544,7 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
 
     handler[0x0] = &nop;
     handler[0xc3] = &jp;
-    handler[0xfe] = &cp;
+    handler[0xfe] = &cp_n8;
     handler[0x28] = &jr<0x28>;
     handler[0xaf] = &x_or<0xaf>;
     handler[0x18] = &jr<0x18>;
@@ -499,6 +625,72 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0xd5] = &push_register<0xd5>;
     handler[0xe5] = &push_register<0xe5>;
     handler[0xf5] = &push_register<0xf5>;
+
+    // arithmetic_register
+    handler[0x80] = &arithmetic_register<0x80>;
+    handler[0x81] = &arithmetic_register<0x81>;
+    handler[0x82] = &arithmetic_register<0x82>;
+    handler[0x83] = &arithmetic_register<0x83>;
+    handler[0x84] = &arithmetic_register<0x84>;
+    handler[0x85] = &arithmetic_register<0x85>;
+    handler[0x86] = &arithmetic_register<0x86>;
+    handler[0x87] = &arithmetic_register<0x87>;
+    handler[0x88] = &arithmetic_register<0x88>;
+    handler[0x89] = &arithmetic_register<0x89>;
+    handler[0x8a] = &arithmetic_register<0x8a>;
+    handler[0x8b] = &arithmetic_register<0x8b>;
+    handler[0x8c] = &arithmetic_register<0x8c>;
+    handler[0x8d] = &arithmetic_register<0x8d>;
+    handler[0x8e] = &arithmetic_register<0x8e>;
+    handler[0x8f] = &arithmetic_register<0x8f>;
+    handler[0x90] = &arithmetic_register<0x90>;
+    handler[0x91] = &arithmetic_register<0x91>;
+    handler[0x92] = &arithmetic_register<0x92>;
+    handler[0x93] = &arithmetic_register<0x93>;
+    handler[0x94] = &arithmetic_register<0x94>;
+    handler[0x95] = &arithmetic_register<0x95>;
+    handler[0x96] = &arithmetic_register<0x96>;
+    handler[0x97] = &arithmetic_register<0x97>;
+    handler[0x98] = &arithmetic_register<0x98>;
+    handler[0x99] = &arithmetic_register<0x99>;
+    handler[0x9a] = &arithmetic_register<0x9a>;
+    handler[0x9b] = &arithmetic_register<0x9b>;
+    handler[0x9c] = &arithmetic_register<0x9c>;
+    handler[0x9d] = &arithmetic_register<0x9d>;
+    handler[0x9e] = &arithmetic_register<0x9e>;
+    handler[0x9f] = &arithmetic_register<0x9f>;
+    handler[0xa0] = &arithmetic_register<0xa0>;
+    handler[0xa1] = &arithmetic_register<0xa1>;
+    handler[0xa2] = &arithmetic_register<0xa2>;
+    handler[0xa3] = &arithmetic_register<0xa3>;
+    handler[0xa4] = &arithmetic_register<0xa4>;
+    handler[0xa5] = &arithmetic_register<0xa5>;
+    handler[0xa6] = &arithmetic_register<0xa6>;
+    handler[0xa7] = &arithmetic_register<0xa7>;
+    handler[0xa8] = &arithmetic_register<0xa8>;
+    handler[0xa9] = &arithmetic_register<0xa9>;
+    handler[0xaa] = &arithmetic_register<0xaa>;
+    handler[0xab] = &arithmetic_register<0xab>;
+    handler[0xac] = &arithmetic_register<0xac>;
+    handler[0xad] = &arithmetic_register<0xad>;
+    handler[0xae] = &arithmetic_register<0xae>;
+    handler[0xaf] = &arithmetic_register<0xaf>;
+    handler[0xb0] = &arithmetic_register<0xb0>;
+    handler[0xb1] = &arithmetic_register<0xb1>;
+    handler[0xb2] = &arithmetic_register<0xb2>;
+    handler[0xb3] = &arithmetic_register<0xb3>;
+    handler[0xb4] = &arithmetic_register<0xb4>;
+    handler[0xb5] = &arithmetic_register<0xb5>;
+    handler[0xb6] = &arithmetic_register<0xb6>;
+    handler[0xb7] = &arithmetic_register<0xb7>;
+    handler[0xb8] = &arithmetic_register<0xb8>;
+    handler[0xb9] = &arithmetic_register<0xb9>;
+    handler[0xba] = &arithmetic_register<0xba>;
+    handler[0xbb] = &arithmetic_register<0xbb>;
+    handler[0xbc] = &arithmetic_register<0xbc>;
+    handler[0xbd] = &arithmetic_register<0xbd>;
+    handler[0xbe] = &arithmetic_register<0xbe>;
+    handler[0xbf] = &arithmetic_register<0xbf>;
 
     // ld_register
     handler[0x40] = &ld_register<0x40>;

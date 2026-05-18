@@ -9,6 +9,23 @@
 
 // --- Utilities ---
 
+static Byte flags_as_byte(SM83::CPU* cpu) {
+    Byte flags = 0x0;
+    flags |= (cpu->carry_flag << 4);
+    flags |= (cpu->half_carry_flag << 5);
+    flags |= (cpu->subtraction_flag << 6);
+    flags |= (cpu->zero_flag << 7);
+
+    return flags;
+}
+
+static void byte_as_flags(SM83::CPU* cpu, Byte data) {
+    cpu->carry_flag = (data & 0b00010000);
+    cpu->half_carry_flag = (data & 0b00100000);
+    cpu->subtraction_flag = (data & 0b01000000);
+    cpu->zero_flag = (data & 0b10000000);
+}
+
 static Byte fetch(SM83::CPU* cpu) {
     Byte retval = cpu->addressable_space.read(cpu->program_counter);
     ++cpu->program_counter;
@@ -35,16 +52,6 @@ static Double_Byte pop(SM83::CPU* cpu) {
     ++cpu->stack_pointer;
 
     return splice(high, low);
-}
-
-static Byte flags_as_byte(SM83::CPU* cpu) {
-    Byte flags = 0x0;
-    flags |= (cpu->carry_flag << 4);
-    flags |= (cpu->half_carry_flag << 5);
-    flags |= (cpu->subtraction_flag << 6);
-    flags |= (cpu->zero_flag << 7);
-
-    return flags;
 }
 
 // --- Instructions ---
@@ -332,6 +339,73 @@ static void push_register(SM83::CPU* cpu) {
     push(cpu, push_data);
 }
 
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0xc1, 0xd1, 0xe1, 0xf1>
+void pop_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing pop_register {:#x}", Opcode);
+    Double_Byte data = pop(cpu);
+
+    if constexpr(Opcode == 0xc1) {
+        cpu->B = hi(data);
+        cpu->C = lo(data);
+    }
+    else if constexpr(Opcode == 0xd1) {
+        cpu->D = hi(data);
+        cpu->E = lo(data);
+    }
+    else if constexpr(Opcode == 0xe1) {
+        cpu->H = hi(data);
+        cpu->L = lo(data);
+    }
+    else if constexpr(Opcode == 0xf1) {
+        cpu->A = hi(data);
+        byte_as_flags(cpu, lo(data));
+    }
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0x03, 0x13, 0x23>
+void inc_double_register(SM83::CPU* cpu) {
+    auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
+        if constexpr(Opcode == 0x03) return {cpu->B, cpu->C};
+        else if constexpr(Opcode == 0x13) return {cpu->D, cpu->E};
+        else if constexpr(Opcode == 0x23) return {cpu->H, cpu->L};
+    }();
+
+    Double_Byte data = splice(high_byte, low_byte);
+    data = data + 1;
+    high_byte = hi(data);
+    low_byte = lo(data);
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0x33>
+void inc_sp(SM83::CPU* cpu) {
+    ++cpu->stack_pointer;
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c>
+void inc_single_register(SM83::CPU* cpu) {
+    auto reg = [&]() -> decltype(auto) {
+        if constexpr(Opcode == 0x04) return static_cast<Byte&>(cpu->B);
+        else if constexpr(Opcode == 0x14) return static_cast<Byte&>(cpu->D);
+        else if constexpr(Opcode == 0x24) return static_cast<Byte&>(cpu->H);
+        else if constexpr(Opcode == 0x34) return cpu->addressable_space[splice(cpu->H, cpu->L)];
+        else if constexpr(Opcode == 0x0c) return static_cast<Byte&>(cpu->C);
+        else if constexpr(Opcode == 0x1c) return static_cast<Byte&>(cpu->E);
+        else if constexpr(Opcode == 0x2c) return static_cast<Byte&>(cpu->L);
+        else if constexpr(Opcode == 0x3c) return static_cast<Byte&>(cpu->A);
+    }();
+
+    cpu->half_carry_flag = ((reg & 0x0f) == 0x0f);
+
+    reg = reg + 1;
+
+    cpu->zero_flag = (reg == 0);
+    cpu->subtraction_flag = false;
+}
+
 // --- Dispatch table ---
 
 using InstructionFunc = void (*)(SM83::CPU*);
@@ -353,6 +427,24 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0x3c] = &inc<0x3c>;
     handler[0xc9] = &ret<0xc9>;
     handler[0xe0] = &ldh<0xe0>;
+
+    // inc_double_register
+    handler[0x03] = &inc_double_register<0x03>;
+    handler[0x13] = &inc_double_register<0x13>;
+    handler[0x23] = &inc_double_register<0x23>;
+
+    // inc_sp
+    handler[0x33] = &inc_sp<0x33>;
+
+    //inc_single_register
+    handler[0x04] = &inc_single_register<0x04>;
+    handler[0x14] = &inc_single_register<0x14>;
+    handler[0x24] = &inc_single_register<0x24>;
+    handler[0x34] = &inc_single_register<0x34>;
+    handler[0x0c] = &inc_single_register<0x0c>;
+    handler[0x1c] = &inc_single_register<0x1c>;
+    handler[0x2c] = &inc_single_register<0x2c>;
+    handler[0x3c] = &inc_single_register<0x3c>;
 
     // call
     handler[0xc4] = &call<0xc4>;
@@ -395,7 +487,13 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0x11] = &ld_n16<0x11>;
     handler[0x21] = &ld_n16<0x21>;
     handler[0x31] = &ld_n16<0x31>;
-
+    
+    // pop_register
+    handler[0xc1] = &pop_register<0xc1>;
+    handler[0xd1] = &pop_register<0xd1>;
+    handler[0xe1] = &pop_register<0xe1>;
+    handler[0xf1] = &pop_register<0xf1>;
+    
     // push_register
     handler[0xc5] = &push_register<0xc5>;
     handler[0xd5] = &push_register<0xd5>;

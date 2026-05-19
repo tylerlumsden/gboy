@@ -81,6 +81,8 @@ static void byte_as_flags(SM83::CPU* cpu, Byte data) {
 static Byte fetch(SM83::CPU* cpu) {
     Byte retval = cpu->addressable_space.read(cpu->program_counter);
     ++cpu->program_counter;
+
+    Log::log<Log::Level::Debug>("Fetched byte {:#x}", retval);    
     return retval;
 }
 
@@ -140,11 +142,23 @@ static void cp_n8(SM83::CPU* cpu) {
 
 // TODO: implement variants
 template<Byte Opcode>
+    requires is_one_of<Opcode, 0x20, 0x30, 0x18, 0x28, 0x38>
 static void jr(SM83::CPU* cpu) {
     Log::log<Log::Level::Debug>("Executing jr {:#x}", Opcode);
     Signed_Byte relative_address = fetch(cpu);
-    if constexpr(Opcode == 0x28) {
+    if constexpr(Opcode == 0x20) {
+        if(cpu->zero_flag) return;
+    }
+    else if constexpr(Opcode == 0x30) {
+        if(cpu->carry_flag) return;
+    }
+    // Opcode 0x18 has no condition check, including constexpr for consistency
+    else if constexpr(Opcode == 0x18);
+    else if constexpr(Opcode == 0x28) {
         if(!cpu->zero_flag) return;
+    }
+    else if constexpr(Opcode == 0x30) {
+        if(!cpu->carry_flag) return;
     }
 
     cpu->program_counter += relative_address;
@@ -232,7 +246,7 @@ static void ld_address_a_misc(SM83::CPU* cpu) {
 template<Byte Opcode>
 static void ld_register(SM83::CPU* cpu) {
     Log::log<Log::Level::Debug>("Executing ld_register {:#x}", Opcode);
-    auto register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
+    decltype(auto) register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
         if constexpr(Regcode == 0b000) return static_cast<Byte&>(cpu->B);
         else if constexpr(Regcode == 0b001) return static_cast<Byte&>(cpu->C);
         else if constexpr(Regcode == 0b010) return static_cast<Byte&>(cpu->D);
@@ -253,7 +267,7 @@ template<Byte Opcode>
     requires is_one_of<Opcode, 0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>
 static void ld_n8(SM83::CPU* cpu) {
     Log::log<Log::Level::Debug>("Executing ld_n8 {:#x}", Opcode);
-    auto load_dest = [&]() -> decltype(auto) {
+    decltype(auto) load_dest = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x06) return static_cast<Byte&>(cpu->B);
         if constexpr(Opcode == 0x0e) return static_cast<Byte&>(cpu->C);
         if constexpr(Opcode == 0x16) return static_cast<Byte&>(cpu->D);
@@ -442,7 +456,7 @@ template<Byte Opcode>
     requires is_one_of<Opcode, 0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c>
 void inc_single_register(SM83::CPU* cpu) {
     Log::log<Log::Level::Debug>("Executing inc_single_register {:#x}", Opcode);
-    auto data = [&]() -> decltype(auto) {
+    decltype(auto) data = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x04) return static_cast<Byte&>(cpu->B);
         else if constexpr(Opcode == 0x14) return static_cast<Byte&>(cpu->D);
         else if constexpr(Opcode == 0x24) return static_cast<Byte&>(cpu->H);
@@ -572,6 +586,13 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0x3c] = &inc<0x3c>;
     handler[0xc9] = &ret<0xc9>;
     handler[0xe0] = &ldh<0xe0>;
+
+    // jr
+    handler[0x20] = &jr<0x20>;
+    handler[0x30] = &jr<0x30>;
+    handler[0x18] = &jr<0x18>;
+    handler[0x28] = &jr<0x28>;
+    handler[0x38] = &jr<0x38>;
 
     // inc_double_register
     handler[0x03] = &inc_double_register<0x03>;
@@ -801,5 +822,7 @@ void SM83::CPU::fetch_decode_execute() {
 
         std::invoke(instruction_handler[next_instruction], this);
         Log::log<Log::Level::Debug>("End instruction loop\n");
+
+        Log::log<Log::Level::Debug>("{}", this->print_state());
     }
 }

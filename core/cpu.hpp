@@ -2,6 +2,8 @@
 
 #include "memory.hpp"
 #include "data_types.hpp"
+#include <format>
+#include <string>
 
 template <auto Val, auto... Candidates>
 constexpr bool is_one_of = ((Val == Candidates) || ...);
@@ -31,6 +33,29 @@ struct CPU {
     MemoryBus addressable_space;
 
     void fetch_decode_execute();
+
+    std::string print_state() {
+        return std::format(R"(
+            CPU State:
+            A: {:#x}
+            zero_flag: {:#x}
+            subtraction_flag: {:#x}
+            half_carry_flag: {:#x}
+            carry_flag: {:#x}
+            B: {:#x}
+            C: {:#x}
+            D: {:#x}
+            E: {:#x}
+            H: {:#x}
+            L: {:#x}
+            stack_pointer: {:#x}
+            program_counter: {:#x}
+            IME: {:#x}
+            )",
+            A, zero_flag, subtraction_flag, half_carry_flag, carry_flag,
+            B, C, D, E, H, L, stack_pointer, program_counter, IME
+        );
+    }
 };
 
 }

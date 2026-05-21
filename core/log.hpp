@@ -6,7 +6,8 @@
 namespace Log {
 
 enum Level {
-    Forced = 2,
+    Forced = 3,
+    Error = 2,
     Info = 1,
     Debug = 0
 };
@@ -14,6 +15,7 @@ enum Level {
 constexpr auto log_level_string(Level log_level) {
     switch(log_level) {
     case Level::Forced: return "FORCED";
+    case Level::Error: return "ERROR";
     case Level::Info: return "INFO";
     case Level::Debug: return "DEBUG";
     default: return "UNKNOWN LOG LEVEL";

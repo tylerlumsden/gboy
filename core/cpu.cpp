@@ -86,6 +86,13 @@ static Byte fetch(SM83::CPU* cpu) {
     return retval;
 }
 
+static Double_Byte fetch_double(SM83::CPU* cpu) {
+    Byte low = fetch(cpu);
+    Byte high = fetch(cpu);
+    
+    return splice(high, low);
+}
+
 static void push(SM83::CPU* cpu, Double_Byte data) {
     Byte high = hi(data);
     Byte low = lo(data);
@@ -121,12 +128,33 @@ static void nop(SM83::CPU* cpu) {
 }
 
 // TODO: implement variants
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>
 static void jp(SM83::CPU* cpu) {
     Log::log<Log::Level::Debug>("Executing jp {:#x}", 0xc3);
-    Byte low_byte = fetch(cpu);
-    Byte high_byte = fetch(cpu);
 
-    cpu->program_counter = splice(high_byte, low_byte);
+    auto data_call = [&]() {
+        if constexpr(is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xca, 0xda>) return fetch_double(cpu);
+        else if constexpr(Opcode == 0xe9) return splice(cpu->H, cpu->L);
+    };
+
+    if constexpr(Opcode == 0xc2) {
+        if(cpu->zero_flag) return;
+    }
+    else if constexpr(Opcode == 0xd2) {
+        if(cpu->carry_flag) return;
+    }
+    else if constexpr(is_one_of<Opcode, 0xc3, 0xe9>) {
+        // Conditionless jump
+    }
+    else if constexpr(Opcode == 0xca) {
+        if(!cpu->zero_flag) return;
+    }
+    else if constexpr(Opcode == 0xda) {
+        if(!cpu->carry_flag) return;
+    }
+
+    cpu->program_counter = data_call();
 }
 
 // TODO: implement variants
@@ -430,19 +458,29 @@ void pop_register(SM83::CPU* cpu) {
 }
 
 template<Byte Opcode>
-    requires is_one_of<Opcode, 0x03, 0x13, 0x23>
-void inc_double_register(SM83::CPU* cpu) {
-    Log::log<Log::Level::Debug>("Executing inc_double_register {:#x}", Opcode);
+    requires is_one_of<Opcode, 0x03, 0x13, 0x23, 0x0b, 0x1b, 0x2b>
+void inc_dec_double_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing inc_dec_double_register {:#x}", Opcode);
     auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
-        if constexpr(Opcode == 0x03) return {cpu->B, cpu->C};
-        else if constexpr(Opcode == 0x13) return {cpu->D, cpu->E};
-        else if constexpr(Opcode == 0x23) return {cpu->H, cpu->L};
+        if constexpr(hi(Opcode) == 0x0) return {cpu->B, cpu->C};
+        else if constexpr(hi(Opcode) == 0x1) return {cpu->D, cpu->E};
+        else if constexpr(hi(Opcode) == 0x2) return {cpu->H, cpu->L};
     }();
 
     Double_Byte data = splice(high_byte, low_byte);
-    data = data + 1;
-    high_byte = hi(data);
+
+    constexpr Byte opcode_column = lo(Opcode);
+    if constexpr(opcode_column == 0x3) data = data + 1;
+    else if constexpr(opcode_column == 0xb) data = data - 1;
+    high_byte = hi(data); 
     low_byte = lo(data);
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0x3b>
+void dec_sp(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing dec_sp {:#x}", Opcode);
+    --cpu->stack_pointer;
 }
 
 template<Byte Opcode>
@@ -453,26 +491,35 @@ void inc_sp(SM83::CPU* cpu) {
 }
 
 template<Byte Opcode>
-    requires is_one_of<Opcode, 0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c>
-void inc_single_register(SM83::CPU* cpu) {
-    Log::log<Log::Level::Debug>("Executing inc_single_register {:#x}", Opcode);
+    requires is_one_of<Opcode, 
+        0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c,
+        0x05, 0x15, 0x25, 0x35, 0x0d, 0x1d, 0x2d, 0x3d
+    >
+void inc_dec_single_register(SM83::CPU* cpu) {
+    Log::log<Log::Level::Debug>("Executing inc_dec_single_register {:#x}", Opcode);
     decltype(auto) data = [&]() -> decltype(auto) {
-        if constexpr(Opcode == 0x04) return static_cast<Byte&>(cpu->B);
-        else if constexpr(Opcode == 0x14) return static_cast<Byte&>(cpu->D);
-        else if constexpr(Opcode == 0x24) return static_cast<Byte&>(cpu->H);
-        else if constexpr(Opcode == 0x34) return cpu->addressable_space[splice(cpu->H, cpu->L)];
-        else if constexpr(Opcode == 0x0c) return static_cast<Byte&>(cpu->C);
-        else if constexpr(Opcode == 0x1c) return static_cast<Byte&>(cpu->E);
-        else if constexpr(Opcode == 0x2c) return static_cast<Byte&>(cpu->L);
-        else if constexpr(Opcode == 0x3c) return static_cast<Byte&>(cpu->A);
+        if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(cpu->B);
+        else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(cpu->D);
+        else if constexpr(Opcode == 0x24 || Opcode == 0x25) return static_cast<Byte&>(cpu->H);
+        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return cpu->addressable_space[splice(cpu->H, cpu->L)];
+        else if constexpr(Opcode == 0x0c || Opcode == 0x0d) return static_cast<Byte&>(cpu->C);
+        else if constexpr(Opcode == 0x1c || Opcode == 0x1d) return static_cast<Byte&>(cpu->E);
+        else if constexpr(Opcode == 0x2c || Opcode == 0x2d) return static_cast<Byte&>(cpu->L);
+        else if constexpr(Opcode == 0x3c || Opcode == 0x3d) return static_cast<Byte&>(cpu->A);
     }();
 
-    cpu->half_carry_flag = ((data & 0x0f) == 0x0f);
-
-    data = data + 1;
-
+    constexpr Byte opcode_column = lo(Opcode);
+    if constexpr(opcode_column == 0x5 || opcode_column == 0xd) {
+        cpu->half_carry_flag = half_carry_sub(data, static_cast<Byte>(1));
+        data = data - 1;
+        cpu->subtraction_flag = true;
+    } 
+    else if constexpr(opcode_column == 0x04 || opcode_column == 0xc) {
+        cpu->half_carry_flag = half_carry_add(data, static_cast<Byte>(1));
+        data = data + 1;
+        cpu->subtraction_flag = false;
+    }
     cpu->zero_flag = (data == 0);
-    cpu->subtraction_flag = false;
 }
 
 template<Byte Opcode>
@@ -576,7 +623,6 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     }(std::make_index_sequence<256>{});
 
     handler[0x0] = &nop;
-    handler[0xc3] = &jp;
     handler[0xfe] = &cp_n8;
     handler[0x28] = &jr<0x28>;
     handler[0xaf] = &x_or<0xaf>;
@@ -587,6 +633,14 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0xc9] = &ret<0xc9>;
     handler[0xe0] = &ldh<0xe0>;
 
+    // jp
+    handler[0xc2] = &jp<0xc2>;
+    handler[0xd2] = &jp<0xd2>;
+    handler[0xc3] = &jp<0xc3>;
+    handler[0xe9] = &jp<0xe9>;
+    handler[0xca] = &jp<0xca>;
+    handler[0xda] = &jp<0xda>;
+
     // jr
     handler[0x20] = &jr<0x20>;
     handler[0x30] = &jr<0x30>;
@@ -595,22 +649,40 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0x38] = &jr<0x38>;
 
     // inc_double_register
-    handler[0x03] = &inc_double_register<0x03>;
-    handler[0x13] = &inc_double_register<0x13>;
-    handler[0x23] = &inc_double_register<0x23>;
+    handler[0x03] = &inc_dec_double_register<0x03>;
+    handler[0x13] = &inc_dec_double_register<0x13>;
+    handler[0x23] = &inc_dec_double_register<0x23>;
 
     // inc_sp
     handler[0x33] = &inc_sp<0x33>;
 
+    // dec_double_register
+    handler[0x0b] = &inc_dec_double_register<0x0b>;
+    handler[0x1b] = &inc_dec_double_register<0x1b>;
+    handler[0x2b] = &inc_dec_double_register<0x2b>;
+
+    // dec_sp
+    handler[0x3b] = &dec_sp<0x3b>;
+
     //inc_single_register
-    handler[0x04] = &inc_single_register<0x04>;
-    handler[0x14] = &inc_single_register<0x14>;
-    handler[0x24] = &inc_single_register<0x24>;
-    handler[0x34] = &inc_single_register<0x34>;
-    handler[0x0c] = &inc_single_register<0x0c>;
-    handler[0x1c] = &inc_single_register<0x1c>;
-    handler[0x2c] = &inc_single_register<0x2c>;
-    handler[0x3c] = &inc_single_register<0x3c>;
+    handler[0x04] = &inc_dec_single_register<0x04>;
+    handler[0x14] = &inc_dec_single_register<0x14>;
+    handler[0x24] = &inc_dec_single_register<0x24>;
+    handler[0x34] = &inc_dec_single_register<0x34>;
+    handler[0x0c] = &inc_dec_single_register<0x0c>;
+    handler[0x1c] = &inc_dec_single_register<0x1c>;
+    handler[0x2c] = &inc_dec_single_register<0x2c>;
+    handler[0x3c] = &inc_dec_single_register<0x3c>;
+
+    //dec_single_register
+    handler[0x05] = &inc_dec_single_register<0x05>;
+    handler[0x15] = &inc_dec_single_register<0x15>;
+    handler[0x25] = &inc_dec_single_register<0x25>;
+    handler[0x35] = &inc_dec_single_register<0x35>;
+    handler[0x0d] = &inc_dec_single_register<0x0d>;
+    handler[0x1d] = &inc_dec_single_register<0x1d>;
+    handler[0x2d] = &inc_dec_single_register<0x2d>;
+    handler[0x3d] = &inc_dec_single_register<0x3d>;
 
     // call
     handler[0xc4] = &call<0xc4>;

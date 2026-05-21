@@ -14,13 +14,13 @@ using Signed_Byte = int8_t;
 using Signed_Double_Byte = int16_t;
 
 template <std::unsigned_integral T>
-inline auto lo(T data) {
+constexpr inline auto lo(T data) {
     data = static_cast<T>(data << 4 * sizeof(T));
     return (data >> 4 * sizeof(T));
 }
 
 template <std::unsigned_integral T>
-inline auto hi(T data) {
+constexpr inline auto hi(T data) {
     return (data >> 4 * sizeof(T));
 }
 

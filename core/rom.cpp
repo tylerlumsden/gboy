@@ -2,12 +2,20 @@
 
 #include "rom.hpp"
 
-Rom::Rom(std::istream& rom_stream) {
+std::vector<Byte> read_data(std::istream& stream) {
+    std::vector<Byte> data_vec;
+
     char data;
-    while(rom_stream.get(data)) {
-        this->data.push_back(static_cast<Byte>(data));
+    while(stream.get(data)) {
+        data_vec.push_back(static_cast<Byte>(data));
     }
+    return data_vec;
 }
+
+Rom::Rom(std::istream& rom_stream) : 
+    data(read_data(rom_stream)), 
+    fixed_bank{data, 0}, 
+    slotted_bank{data, 0x4000}  {}
 
 void Rom::write_as_hex(std::ostream& out) {
     constexpr size_t newline_step = 1;

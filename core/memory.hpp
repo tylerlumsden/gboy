@@ -5,7 +5,7 @@
 
 struct MemoryBus {
     std::function<void(Address, Byte)> write;
-    std::function<const Byte&(Address)> read;
+    std::function<Byte(Address)> read;
 
     struct Proxy {
         MemoryBus& bus;

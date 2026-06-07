@@ -1,17 +1,17 @@
 #pragma once
 
-#include "rom.hpp"
+#include "cartridge.hpp"
 #include "cpu.hpp"
 #include "data_types.hpp"
 
 struct GameBoy { 
-    Rom rom;
+    Cartridge cart;
     std::array<Byte, 0xc000> memory_map;
 
     SM83::CPU processor;
 
     void run();
 
-    GameBoy(Rom rom);
+    GameBoy(Cartridge cartridge);
     GameBoy() = delete; 
 };

@@ -1,19 +1,24 @@
 #include "gameboy.hpp"
-#include "rom.hpp"
 #include "data_types.hpp"
 #include "log.hpp"
 
 #include <format>
 #include <stdexcept>
 
-GameBoy::GameBoy(Rom rom) : rom(rom) {
+GameBoy::GameBoy(Cartridge cartridge) : cart(cartridge) {
     auto memory_write = [this](Address addr, Byte data) {
         Log::log<Log::Level::Debug>("Writing to memory address {:#x} with data {}", addr, data);
-        if(0x0 <= addr && addr <= 0x3fff) {
+        if(0x0 <= addr && addr <= 0x1fff) {
+            //this->cart.impl.ram.ram_toggle = ((data & 0x0a) == 0x0a);
+        }
+        else if(0x2000 <= addr && addr <= 0x3fff) {
+            this->cart.impl.rom.set_bank_id(data);
+        }
+        else if(0x4000 <= addr && addr <= 0x7fff) {
             throw std::logic_error(std::format(
-                "Attempted to write to ROM address {:#x}\n", addr
+                "Attempted to write to address {:#x}. This address is either unimplemented or out of range.\n", addr
             ));
-        } 
+        }
         
         else {
             this->memory_map[addr - 0x3fff] = data;
@@ -29,7 +34,7 @@ GameBoy::GameBoy(Rom rom) : rom(rom) {
     auto memory_read = [this](Address addr) -> const Byte& {
         Log::log<Log::Level::Debug>("Reading from memory address {:#x}", addr);
         if(0x0 <= addr && addr <= 0x3fff) {
-            return this->rom.data[addr];
+            return this->cart.impl.rom.data[addr];
         } 
         
         else {

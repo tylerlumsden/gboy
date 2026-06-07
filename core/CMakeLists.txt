@@ -1,6 +1,6 @@
 add_library(core STATIC
     gameboy.cpp
-    rom.cpp
+    cartridge.cpp
     cpu.cpp
 )
 

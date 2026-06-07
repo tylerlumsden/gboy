@@ -7,9 +7,8 @@
 int main() {
     try {
         std::ifstream reader("resources/cpu_instrs.gb");
-        Rom rom(reader);
 
-        GameBoy device(rom);
+        GameBoy device(construct_cartridge(reader));
         device.run();
     } catch(const std::exception& e) {
         std::cerr << "Fatal exception: " << e.what() << "\n";

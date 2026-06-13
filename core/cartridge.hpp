@@ -3,9 +3,9 @@
 #include <iosfwd>
 #include <vector>
 #include <format>
+#include <bit>
 
 #include "data_types.hpp"
-#include "memory.hpp"
 
 template<Double_Byte Size>
 struct WrappingView {
@@ -24,29 +24,30 @@ struct WrappingView {
 };
 
 struct Rom {
-    // We use a wrapping view here defensively.
-    // This is because the Rom is data loaded externally from the program.
-    // Hence if the program were provided Rom data that is not the expected size,
-    // we mimic the Gameboy's behaviour by wrapping the memory instead.
-    Byte bank_bits;
-
     std::vector<Byte> data;
-    const WrappingView<0x4000> fixed_bank;
-    WrappingView<0x4000> slotted_bank;
+
+    std::size_t num_banks;
 
     Rom(std::vector<Byte> rom_data);
 };
 
 struct Ram {
-    std::array<Byte, 0x8000> data;
-    std::span<Byte, 0x2000> slotted_bank;
+    std::vector<Byte> data;
 
-    Ram() : slotted_bank(data.data(), 0x2000) {}
+    std::size_t num_banks;
+
+    Ram(std::size_t num_banks);
 };
 
 struct MBC1Cartridge {
     Rom rom;
     Ram ram;
+
+    Byte rom_bank_number = 0x0;
+    Byte ram_bank_number = 0x0;
+    bool bank_mode = 0x0; 
+
+    bool ram_enable = 0x0;
 };
 
 // Generic interface for the cartridge implementation.
@@ -54,6 +55,9 @@ struct MBC1Cartridge {
 // so this unifies them under the same interface.
 struct Cartridge {
     MBC1Cartridge impl;
+
+    Byte read(Address addr);
+    void write(Address addr, Byte data);
 };
 
 Cartridge construct_cartridge(std::istream& rom_stream);

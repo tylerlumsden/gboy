@@ -8,10 +8,18 @@ using Bit = bool;
 
 using Byte = uint8_t;
 using Double_Byte = uint16_t;
+using Quad_Byte = uint32_t;
 using Address = uint16_t;
 
 using Signed_Byte = int8_t;
 using Signed_Double_Byte = int16_t;
+
+template <std::unsigned_integral T>
+constexpr inline T chop_least(T data, std::size_t num_bits) {
+    if(num_bits >= sizeof(T) * 8) return data;
+    if(num_bits <= 0) return 0;
+    return (data << num_bits) >> num_bits;
+}
 
 template <std::unsigned_integral T>
 constexpr inline auto lo(T data) {

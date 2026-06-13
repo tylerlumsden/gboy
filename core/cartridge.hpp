@@ -6,6 +6,7 @@
 #include <bit>
 
 #include "data_types.hpp"
+<<<<<<< HEAD
 
 template<Double_Byte Size>
 struct WrappingView {
@@ -26,14 +27,25 @@ struct WrappingView {
 struct Rom {
     std::vector<Byte> data;
 
+=======
+
+struct Rom {
+    std::vector<Byte> data;
+    
+    // Stored here for convenience
+>>>>>>> b8e817c (Finished MBC1 impl)
     std::size_t num_banks;
 
-    Rom(std::vector<Byte> rom_data);
+    Rom(std::vector<Byte> rom_data, std::size_t num_banks);
 };
 
 struct Ram {
     std::vector<Byte> data;
 
+<<<<<<< HEAD
+=======
+    // Stored here for convenience
+>>>>>>> b8e817c (Finished MBC1 impl)
     std::size_t num_banks;
 
     Ram(std::size_t num_banks);

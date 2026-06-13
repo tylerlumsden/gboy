@@ -8,6 +8,8 @@
 template <auto Val, auto... Candidates>
 constexpr bool is_one_of = ((Val == Candidates) || ...);
 
+struct GameBoy;
+
 namespace SM83 {
 
 struct CPU {
@@ -32,8 +34,6 @@ struct CPU {
 
     MemoryBus addressable_space;
 
-    void fetch_decode_execute();
-
     std::string print_state() {
         return std::format(R"(
             CPU State:
@@ -57,5 +57,7 @@ struct CPU {
         );
     }
 };
+
+void fetch_decode_execute(GameBoy& gb);
 
 }

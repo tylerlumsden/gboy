@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <format>
 
-#include "cpu.hpp"
+#include "gameboy.hpp"
 #include "data_types.hpp"
 #include "log.hpp"
 
@@ -61,56 +61,56 @@ static bool carry_sub(Byte a, Operands... operands) {
     return false;
 }
 
-static Byte flags_as_byte(SM83::CPU& cpu) {
+static Byte flags_as_byte(GameBoy& gb) {
     Byte flags = 0x0;
-    flags |= (cpu.carry_flag << 4);
-    flags |= (cpu.half_carry_flag << 5);
-    flags |= (cpu.subtraction_flag << 6);
-    flags |= (cpu.zero_flag << 7);
+    flags |= (gb.processor.carry_flag << 4);
+    flags |= (gb.processor.half_carry_flag << 5);
+    flags |= (gb.processor.subtraction_flag << 6);
+    flags |= (gb.processor.zero_flag << 7);
 
     return flags;
 }
 
-static void byte_as_flags(SM83::CPU& cpu, Byte data) {
-    cpu.carry_flag = (data & 0b00010000);
-    cpu.half_carry_flag = (data & 0b00100000);
-    cpu.subtraction_flag = (data & 0b01000000);
-    cpu.zero_flag = (data & 0b10000000);
+static void byte_as_flags(GameBoy& gb, Byte data) {
+    gb.processor.carry_flag = (data & 0b00010000);
+    gb.processor.half_carry_flag = (data & 0b00100000);
+    gb.processor.subtraction_flag = (data & 0b01000000);
+    gb.processor.zero_flag = (data & 0b10000000);
 }
 
-static Byte fetch(SM83::CPU& cpu) {
-    Byte retval = cpu.addressable_space.read(cpu.program_counter);
-    ++cpu.program_counter;
+static Byte fetch(GameBoy& gb) {
+    Byte retval = gb.processor.addressable_space.read(gb.processor.program_counter);
+    ++gb.processor.program_counter;
 
     Log::log<Log::Level::Debug>("Fetched byte {:#x}", retval);    
     return retval;
 }
 
-static Double_Byte fetch_double(SM83::CPU& cpu) {
-    Byte low = fetch(cpu);
-    Byte high = fetch(cpu);
+static Double_Byte fetch_double(GameBoy& gb) {
+    Byte low = fetch(gb);
+    Byte high = fetch(gb);
     
     return splice(high, low);
 }
 
-static void push(SM83::CPU& cpu, Double_Byte data) {
+static void push(GameBoy& gb, Double_Byte data) {
     Byte high = hi(data);
     Byte low = lo(data);
 
 
-    --cpu.stack_pointer;
-    cpu.addressable_space[cpu.stack_pointer] = high;
+    --gb.processor.stack_pointer;
+    gb.processor.addressable_space[gb.processor.stack_pointer] = high;
 
-    --cpu.stack_pointer;
-    cpu.addressable_space[cpu.stack_pointer] = low;
+    --gb.processor.stack_pointer;
+    gb.processor.addressable_space[gb.processor.stack_pointer] = low;
 }
 
-static Double_Byte pop(SM83::CPU& cpu) {
-    Byte low = cpu.addressable_space[cpu.stack_pointer];
-    ++cpu.stack_pointer;
+static Double_Byte pop(GameBoy& gb) {
+    Byte low = gb.processor.addressable_space[gb.processor.stack_pointer];
+    ++gb.processor.stack_pointer;
 
-    Byte high = cpu.addressable_space[cpu.stack_pointer];
-    ++cpu.stack_pointer;
+    Byte high = gb.processor.addressable_space[gb.processor.stack_pointer];
+    ++gb.processor.stack_pointer;
 
     return splice(high, low);
 }
@@ -118,11 +118,11 @@ static Double_Byte pop(SM83::CPU& cpu) {
 // --- Instructions ---
 
 template<Byte Opcode>
-static void no_impl(SM83::CPU& cpu) {
+static void no_impl(GameBoy& gb) {
     throw std::logic_error(std::format("Opcode with byte value {:#x} is not implemented.\n", Opcode));
 }
 
-static void nop(SM83::CPU& cpu) {
+static void nop(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing nop {:#x}", 0x00);
     // Should use 4 cycles
 }
@@ -130,131 +130,131 @@ static void nop(SM83::CPU& cpu) {
 // TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>
-static void jp(SM83::CPU& cpu) {
+static void jp(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing jp {:#x}", 0xc3);
 
     auto data_call = [&]() {
-        if constexpr(is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xca, 0xda>) return fetch_double(cpu);
-        else if constexpr(Opcode == 0xe9) return splice(cpu.H, cpu.L);
+        if constexpr(is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xca, 0xda>) return fetch_double(gb);
+        else if constexpr(Opcode == 0xe9) return splice(gb.processor.H, gb.processor.L);
     };
 
     if constexpr(Opcode == 0xc2) {
-        if(cpu.zero_flag) return;
+        if(gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0xd2) {
-        if(cpu.carry_flag) return;
+        if(gb.processor.carry_flag) return;
     }
     else if constexpr(is_one_of<Opcode, 0xc3, 0xe9>) {
         // Conditionless jump
     }
     else if constexpr(Opcode == 0xca) {
-        if(!cpu.zero_flag) return;
+        if(!gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0xda) {
-        if(!cpu.carry_flag) return;
+        if(!gb.processor.carry_flag) return;
     }
 
-    cpu.program_counter = data_call();
+    gb.processor.program_counter = data_call();
 }
 
 // TODO: implement variants
-static void cp_n8(SM83::CPU& cpu) {
+static void cp_n8(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing cp_n8 {:#x}", 0xfe);
-    Byte num = fetch(cpu);
+    Byte num = fetch(gb);
 
-    cpu.zero_flag = (num == cpu.A);
-    cpu.subtraction_flag = true;
-    cpu.half_carry_flag = lo(num) > lo(cpu.A);
-    cpu.carry_flag = (num > cpu.A);
+    gb.processor.zero_flag = (num == gb.processor.A);
+    gb.processor.subtraction_flag = true;
+    gb.processor.half_carry_flag = lo(num) > lo(gb.processor.A);
+    gb.processor.carry_flag = (num > gb.processor.A);
 }
 
 // TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x20, 0x30, 0x18, 0x28, 0x38>
-static void jr(SM83::CPU& cpu) {
+static void jr(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing jr {:#x}", Opcode);
-    Signed_Byte relative_address = fetch(cpu);
+    Signed_Byte relative_address = fetch(gb);
     if constexpr(Opcode == 0x20) {
-        if(cpu.zero_flag) return;
+        if(gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0x30) {
-        if(cpu.carry_flag) return;
+        if(gb.processor.carry_flag) return;
     }
     // Opcode 0x18 has no condition check, including constexpr for consistency
     else if constexpr(Opcode == 0x18);
     else if constexpr(Opcode == 0x28) {
-        if(!cpu.zero_flag) return;
+        if(!gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0x30) {
-        if(!cpu.carry_flag) return;
+        if(!gb.processor.carry_flag) return;
     }
 
-    cpu.program_counter += relative_address;
+    gb.processor.program_counter += relative_address;
 }
 
 // TODO: implement variants
 template<Byte Opcode>
-static void x_or(SM83::CPU& cpu) {
+static void x_or(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing x_or {:#x}", Opcode);
     if constexpr(Opcode == 0xaf) {
-        cpu.A = cpu.A ^ cpu.A;
+        gb.processor.A = gb.processor.A ^ gb.processor.A;
     }
 }
 
-static void di(SM83::CPU& cpu) {
+static void di(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing di {:#x}", 0xf3);
-    cpu.IME = false;
+    gb.processor.IME = false;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x02, 0x0a, 0x12, 0x1a, 0x22, 0x2a, 0x32, 0x3a>
-static void ld_address_a(SM83::CPU& cpu) {
+static void ld_address_a(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_address_a {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0xf0);
     Address address = [&]() {
-        if constexpr(addr_type == 0x00) return splice(cpu.B, cpu.C);
-        else if constexpr(addr_type == 0x10) return splice(cpu.D, cpu.E);
+        if constexpr(addr_type == 0x00) return splice(gb.processor.B, gb.processor.C);
+        else if constexpr(addr_type == 0x10) return splice(gb.processor.D, gb.processor.E);
         else if constexpr(addr_type == 0x20) {
-            Address addr = splice(cpu.H, cpu.L);
+            Address addr = splice(gb.processor.H, gb.processor.L);
             Address addr_increment = addr + 1;
-            cpu.H = hi(addr_increment);
-            cpu.L = lo(addr_increment);
+            gb.processor.H = hi(addr_increment);
+            gb.processor.L = lo(addr_increment);
             return addr;
         }
         else if constexpr(addr_type == 0x30) {
-            Address addr = splice(cpu.H, cpu.L);
+            Address addr = splice(gb.processor.H, gb.processor.L);
             Address addr_decrement = addr + 1;
-            cpu.H = hi(addr_decrement);
-            cpu.L = lo(addr_decrement);
+            gb.processor.H = hi(addr_decrement);
+            gb.processor.L = lo(addr_decrement);
             return addr;
         }
     }();
 
     constexpr Byte load_order = (Opcode & 0x0f);
     if constexpr(load_order == 0x02) {
-        cpu.addressable_space[address] = cpu.A;
+        gb.processor.addressable_space[address] = gb.processor.A;
     }
     else if constexpr(load_order == 0x0a) {
-        cpu.A = cpu.addressable_space[address];
+        gb.processor.A = gb.processor.addressable_space[address];
     }
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xe0, 0xe2, 0xea, 0xf0, 0xf2, 0xfa>
-static void ld_address_a_misc(SM83::CPU& cpu) {
+static void ld_address_a_misc(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_address_a_misc {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0x0f);
     Address address = [&]() {
         if constexpr(addr_type == 0x00) {
-            Byte addr = fetch(cpu);
+            Byte addr = fetch(gb);
             return 0xff00 | addr;
         }
         else if constexpr(addr_type == 0x02) {
-            return 0xff00 | cpu.C;
+            return 0xff00 | gb.processor.C;
         }
         else if constexpr(addr_type == 0x0a) {
-            Byte low_byte = fetch(cpu);
-            Byte high_byte = fetch(cpu);
+            Byte low_byte = fetch(gb);
+            Byte high_byte = fetch(gb);
 
             return splice(high_byte, low_byte);
         }
@@ -262,27 +262,27 @@ static void ld_address_a_misc(SM83::CPU& cpu) {
 
     constexpr Byte load_order = (Opcode & 0xf0);
     if constexpr(load_order == 0xe0) {
-        cpu.addressable_space[address] = cpu.A;
+        gb.processor.addressable_space[address] = gb.processor.A;
     }
     else if constexpr(load_order == 0xf0) {
-        cpu.A = cpu.addressable_space[address];
+        gb.processor.A = gb.processor.addressable_space[address];
     }
 }
 
 
 
 template<Byte Opcode>
-static void ld_register(SM83::CPU& cpu) {
+static void ld_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_register {:#x}", Opcode);
     decltype(auto) register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
-        if constexpr(Regcode == 0b000) return static_cast<Byte&>(cpu.B);
-        else if constexpr(Regcode == 0b001) return static_cast<Byte&>(cpu.C);
-        else if constexpr(Regcode == 0b010) return static_cast<Byte&>(cpu.D);
-        else if constexpr(Regcode == 0b011) return static_cast<Byte&>(cpu.E);
-        else if constexpr(Regcode == 0b100) return static_cast<Byte&>(cpu.H);
-        else if constexpr(Regcode == 0b101) return static_cast<Byte&>(cpu.L);
-        else if constexpr(Regcode == 0b110) return cpu.addressable_space[splice(cpu.H, cpu.L)];
-        else if constexpr(Regcode == 0b111) return static_cast<Byte&>(cpu.A);
+        if constexpr(Regcode == 0b000) return static_cast<Byte&>(gb.processor.B);
+        else if constexpr(Regcode == 0b001) return static_cast<Byte&>(gb.processor.C);
+        else if constexpr(Regcode == 0b010) return static_cast<Byte&>(gb.processor.D);
+        else if constexpr(Regcode == 0b011) return static_cast<Byte&>(gb.processor.E);
+        else if constexpr(Regcode == 0b100) return static_cast<Byte&>(gb.processor.H);
+        else if constexpr(Regcode == 0b101) return static_cast<Byte&>(gb.processor.L);
+        else if constexpr(Regcode == 0b110) return gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)];
+        else if constexpr(Regcode == 0b111) return static_cast<Byte&>(gb.processor.A);
     };
 
     constexpr Byte DestCode = (Opcode & 0b00111000) >> 3;
@@ -293,36 +293,36 @@ static void ld_register(SM83::CPU& cpu) {
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>
-static void ld_n8(SM83::CPU& cpu) {
+static void ld_n8(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_n8 {:#x}", Opcode);
     decltype(auto) load_dest = [&]() -> decltype(auto) {
-        if constexpr(Opcode == 0x06) return static_cast<Byte&>(cpu.B);
-        if constexpr(Opcode == 0x0e) return static_cast<Byte&>(cpu.C);
-        if constexpr(Opcode == 0x16) return static_cast<Byte&>(cpu.D);
-        if constexpr(Opcode == 0x1e) return static_cast<Byte&>(cpu.E);
-        if constexpr(Opcode == 0x26) return static_cast<Byte&>(cpu.H);
-        if constexpr(Opcode == 0x2e) return static_cast<Byte&>(cpu.L);
-        if constexpr(Opcode == 0x36) return cpu.addressable_space[splice(cpu.H, cpu.L)];
-        if constexpr(Opcode == 0x3e) return static_cast<Byte&>(cpu.A);
+        if constexpr(Opcode == 0x06) return static_cast<Byte&>(gb.processor.B);
+        if constexpr(Opcode == 0x0e) return static_cast<Byte&>(gb.processor.C);
+        if constexpr(Opcode == 0x16) return static_cast<Byte&>(gb.processor.D);
+        if constexpr(Opcode == 0x1e) return static_cast<Byte&>(gb.processor.E);
+        if constexpr(Opcode == 0x26) return static_cast<Byte&>(gb.processor.H);
+        if constexpr(Opcode == 0x2e) return static_cast<Byte&>(gb.processor.L);
+        if constexpr(Opcode == 0x36) return gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)];
+        if constexpr(Opcode == 0x3e) return static_cast<Byte&>(gb.processor.A);
     };
 
-    load_dest() = fetch(cpu);
+    load_dest() = fetch(gb);
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x01, 0x11, 0x21, 0x31>
-static void ld_n16(SM83::CPU& cpu) {
+static void ld_n16(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_n16 {:#x}", Opcode);
-    Byte low = fetch(cpu);
-    Byte high = fetch(cpu);
+    Byte low = fetch(gb);
+    Byte high = fetch(gb);
 
     if constexpr(Opcode == 0x31) {
-        cpu.stack_pointer = splice(high, low);
+        gb.processor.stack_pointer = splice(high, low);
     } else {
         auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
-            if constexpr(Opcode == 0x01) return {cpu.B, cpu.C};
-            else if constexpr(Opcode == 0x11) return {cpu.D, cpu.E};
-            else if constexpr(Opcode == 0x21) return {cpu.H, cpu.L};
+            if constexpr(Opcode == 0x01) return {gb.processor.B, gb.processor.C};
+            else if constexpr(Opcode == 0x11) return {gb.processor.D, gb.processor.E};
+            else if constexpr(Opcode == 0x21) return {gb.processor.H, gb.processor.L};
         }();
 
         high_byte = high; 
@@ -332,10 +332,10 @@ static void ld_n16(SM83::CPU& cpu) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void swap(SM83::CPU& cpu) {
+static void swap(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing swap {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
-        if constexpr(Opcode == 0x31) return cpu.A;
+        if constexpr(Opcode == 0x31) return gb.processor.A;
     }();
 
     Byte push_high = (data << 4);
@@ -345,26 +345,26 @@ static void swap(SM83::CPU& cpu) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void rst(SM83::CPU& cpu) {
+static void rst(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing rst {:#x}", Opcode);
-    Byte high_byte = hi(cpu.program_counter);
-    Byte low_byte = lo(cpu.program_counter);
-    cpu.addressable_space.write(cpu.stack_pointer, high_byte);
-    --cpu.stack_pointer;
-    cpu.addressable_space.write(cpu.stack_pointer, low_byte);
-    --cpu.stack_pointer;
+    Byte high_byte = hi(gb.processor.program_counter);
+    Byte low_byte = lo(gb.processor.program_counter);
+    gb.processor.addressable_space.write(gb.processor.stack_pointer, high_byte);
+    --gb.processor.stack_pointer;
+    gb.processor.addressable_space.write(gb.processor.stack_pointer, low_byte);
+    --gb.processor.stack_pointer;
 
     if constexpr(Opcode == 0xff) {
-        cpu.program_counter = 0x38;
+        gb.processor.program_counter = 0x38;
     }
 }
 
 // TODO: implement variants
 template<Byte Opcode>
-static void inc(SM83::CPU& cpu) {
+static void inc(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing inc {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
-        if constexpr(Opcode == 0x3c) return cpu.A;
+        if constexpr(Opcode == 0x3c) return gb.processor.A;
     }();
 
     ++data;
@@ -372,99 +372,99 @@ static void inc(SM83::CPU& cpu) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void ret(SM83::CPU& cpu) {
+static void ret(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
 
-    cpu.program_counter = pop(cpu);
+    gb.processor.program_counter = pop(gb);
 }
 
 // TODO: implement variants
 template<Byte Opcode>
-static void ldh(SM83::CPU& cpu) {
+static void ldh(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ldh {:#x}", Opcode);
     if constexpr(Opcode == 0xe0) {
-        Byte low_byte = fetch(cpu);
+        Byte low_byte = fetch(gb);
         Byte high_byte = 0xff;
 
         Address addr = splice(high_byte, low_byte);
 
-        cpu.addressable_space.write(addr, cpu.A);
+        gb.processor.addressable_space.write(addr, gb.processor.A);
     }
 }
 
 // TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
-static void call(SM83::CPU& cpu) {
+static void call(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing call {:#x}", Opcode);
     if constexpr(Opcode == 0xc4) {
-        if(cpu.zero_flag) return;
+        if(gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0xd4) {
-        if(cpu.carry_flag) return;
+        if(gb.processor.carry_flag) return;
     }
     else if constexpr(Opcode == 0xcc) {
-        if(!cpu.zero_flag) return;
+        if(!gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0xdc) {
-        if(!cpu.carry_flag) return;
+        if(!gb.processor.carry_flag) return;
     }
 
-    Byte low_byte = fetch(cpu);
-    Byte high_byte = fetch(cpu);
+    Byte low_byte = fetch(gb);
+    Byte high_byte = fetch(gb);
 
     Address subroutine = splice(high_byte, low_byte);
 
-    push(cpu, cpu.program_counter);
-    cpu.program_counter = subroutine;
+    push(gb, gb.processor.program_counter);
+    gb.processor.program_counter = subroutine;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc5, 0xd5, 0xe5, 0xf5>
-static void push_register(SM83::CPU& cpu) {
+static void push_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing push_register {:#x}", Opcode);
     Double_Byte push_data = [&]() {
-        if constexpr(Opcode == 0xc5) return splice(cpu.B, cpu.C);
-        else if constexpr(Opcode == 0xd5) return splice(cpu.D, cpu.E);
-        else if constexpr(Opcode == 0xe5) return splice(cpu.H, cpu.L);
-        else if constexpr(Opcode == 0xf5) return splice(cpu.A, flags_as_byte(cpu));
+        if constexpr(Opcode == 0xc5) return splice(gb.processor.B, gb.processor.C);
+        else if constexpr(Opcode == 0xd5) return splice(gb.processor.D, gb.processor.E);
+        else if constexpr(Opcode == 0xe5) return splice(gb.processor.H, gb.processor.L);
+        else if constexpr(Opcode == 0xf5) return splice(gb.processor.A, flags_as_byte(gb));
     }();
 
-    push(cpu, push_data);
+    push(gb, push_data);
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc1, 0xd1, 0xe1, 0xf1>
-void pop_register(SM83::CPU& cpu) {
+void pop_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing pop_register {:#x}", Opcode);
-    Double_Byte data = pop(cpu);
+    Double_Byte data = pop(gb);
 
     if constexpr(Opcode == 0xc1) {
-        cpu.B = hi(data);
-        cpu.C = lo(data);
+        gb.processor.B = hi(data);
+        gb.processor.C = lo(data);
     }
     else if constexpr(Opcode == 0xd1) {
-        cpu.D = hi(data);
-        cpu.E = lo(data);
+        gb.processor.D = hi(data);
+        gb.processor.E = lo(data);
     }
     else if constexpr(Opcode == 0xe1) {
-        cpu.H = hi(data);
-        cpu.L = lo(data);
+        gb.processor.H = hi(data);
+        gb.processor.L = lo(data);
     }
     else if constexpr(Opcode == 0xf1) {
-        cpu.A = hi(data);
-        byte_as_flags(cpu, lo(data));
+        gb.processor.A = hi(data);
+        byte_as_flags(gb, lo(data));
     }
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x03, 0x13, 0x23, 0x0b, 0x1b, 0x2b>
-void inc_dec_double_register(SM83::CPU& cpu) {
+void inc_dec_double_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing inc_dec_double_register {:#x}", Opcode);
     auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
-        if constexpr(hi(Opcode) == 0x0) return {cpu.B, cpu.C};
-        else if constexpr(hi(Opcode) == 0x1) return {cpu.D, cpu.E};
-        else if constexpr(hi(Opcode) == 0x2) return {cpu.H, cpu.L};
+        if constexpr(hi(Opcode) == 0x0) return {gb.processor.B, gb.processor.C};
+        else if constexpr(hi(Opcode) == 0x1) return {gb.processor.D, gb.processor.E};
+        else if constexpr(hi(Opcode) == 0x2) return {gb.processor.H, gb.processor.L};
     }();
 
     Double_Byte data = splice(high_byte, low_byte);
@@ -478,16 +478,16 @@ void inc_dec_double_register(SM83::CPU& cpu) {
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x3b>
-void dec_sp(SM83::CPU& cpu) {
+void dec_sp(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing dec_sp {:#x}", Opcode);
-    --cpu.stack_pointer;
+    --gb.processor.stack_pointer;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x33>
-void inc_sp(SM83::CPU& cpu) {
+void inc_sp(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing inc_sp {:#x}", Opcode);
-    ++cpu.stack_pointer;
+    ++gb.processor.stack_pointer;
 }
 
 template<Byte Opcode>
@@ -495,31 +495,31 @@ template<Byte Opcode>
         0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c,
         0x05, 0x15, 0x25, 0x35, 0x0d, 0x1d, 0x2d, 0x3d
     >
-void inc_dec_single_register(SM83::CPU& cpu) {
+void inc_dec_single_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing inc_dec_single_register {:#x}", Opcode);
     decltype(auto) data = [&]() -> decltype(auto) {
-        if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(cpu.B);
-        else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(cpu.D);
-        else if constexpr(Opcode == 0x24 || Opcode == 0x25) return static_cast<Byte&>(cpu.H);
-        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return cpu.addressable_space[splice(cpu.H, cpu.L)];
-        else if constexpr(Opcode == 0x0c || Opcode == 0x0d) return static_cast<Byte&>(cpu.C);
-        else if constexpr(Opcode == 0x1c || Opcode == 0x1d) return static_cast<Byte&>(cpu.E);
-        else if constexpr(Opcode == 0x2c || Opcode == 0x2d) return static_cast<Byte&>(cpu.L);
-        else if constexpr(Opcode == 0x3c || Opcode == 0x3d) return static_cast<Byte&>(cpu.A);
+        if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(gb.processor.B);
+        else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(gb.processor.D);
+        else if constexpr(Opcode == 0x24 || Opcode == 0x25) return static_cast<Byte&>(gb.processor.H);
+        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)];
+        else if constexpr(Opcode == 0x0c || Opcode == 0x0d) return static_cast<Byte&>(gb.processor.C);
+        else if constexpr(Opcode == 0x1c || Opcode == 0x1d) return static_cast<Byte&>(gb.processor.E);
+        else if constexpr(Opcode == 0x2c || Opcode == 0x2d) return static_cast<Byte&>(gb.processor.L);
+        else if constexpr(Opcode == 0x3c || Opcode == 0x3d) return static_cast<Byte&>(gb.processor.A);
     }();
 
     constexpr Byte opcode_column = lo(Opcode);
     if constexpr(opcode_column == 0x5 || opcode_column == 0xd) {
-        cpu.half_carry_flag = half_carry_sub(data, static_cast<Byte>(1));
+        gb.processor.half_carry_flag = half_carry_sub(data, static_cast<Byte>(1));
         data = data - 1;
-        cpu.subtraction_flag = true;
+        gb.processor.subtraction_flag = true;
     } 
     else if constexpr(opcode_column == 0x04 || opcode_column == 0xc) {
-        cpu.half_carry_flag = half_carry_add(data, static_cast<Byte>(1));
+        gb.processor.half_carry_flag = half_carry_add(data, static_cast<Byte>(1));
         data = data + 1;
-        cpu.subtraction_flag = false;
+        gb.processor.subtraction_flag = false;
     }
-    cpu.zero_flag = (data == 0);
+    gb.processor.zero_flag = (data == 0);
 }
 
 template<Byte Opcode>
@@ -527,94 +527,94 @@ template<Byte Opcode>
         (0x80 <= Opcode && Opcode <= 0xbf) ||
         is_one_of<Opcode, 0xc6, 0xd6, 0xe6, 0xf6, 0xce, 0xde, 0xee, 0xfe>
     )
-void arithmetic_register(SM83::CPU& cpu) {
+void arithmetic_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing arithmetic_register {:#x}", Opcode);
     Byte data = [&]() {
         // Additional n8 arithmetic instructions
-        if constexpr((Opcode & 0xf0) > 0xb0) return fetch(cpu);
+        if constexpr((Opcode & 0xf0) > 0xb0) return fetch(gb);
 
         // Standard register arithmetic instructions
         constexpr Byte RegCode = ((Opcode & 0x0f) % 0x08);
-        if constexpr(RegCode == 0x00) return cpu.B;
-        else if constexpr(RegCode == 0x01) return cpu.C;
-        else if constexpr(RegCode == 0x02) return cpu.D;
-        else if constexpr(RegCode == 0x03) return cpu.E;
-        else if constexpr(RegCode == 0x04) return cpu.H;
-        else if constexpr(RegCode == 0x05) return cpu.L;
-        else if constexpr(RegCode == 0x06) return static_cast<Byte>(cpu.addressable_space[splice(cpu.H, cpu.L)]);
-        else if constexpr(RegCode == 0x07) return cpu.A;
+        if constexpr(RegCode == 0x00) return gb.processor.B;
+        else if constexpr(RegCode == 0x01) return gb.processor.C;
+        else if constexpr(RegCode == 0x02) return gb.processor.D;
+        else if constexpr(RegCode == 0x03) return gb.processor.E;
+        else if constexpr(RegCode == 0x04) return gb.processor.H;
+        else if constexpr(RegCode == 0x05) return gb.processor.L;
+        else if constexpr(RegCode == 0x06) return static_cast<Byte>(gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)]);
+        else if constexpr(RegCode == 0x07) return gb.processor.A;
     }();
 
     constexpr Byte instruction_col = (Opcode & 0x0f) / 0x08;
     constexpr Byte instruction_row = (Opcode & 0xf0) % 0x40;
     if constexpr(instruction_row == 0x00 && instruction_col == 0x00) {
-        cpu.half_carry_flag = half_carry_add(cpu.A, data);
-        cpu.carry_flag = carry_add(cpu.A, data);
+        gb.processor.half_carry_flag = half_carry_add(gb.processor.A, data);
+        gb.processor.carry_flag = carry_add(gb.processor.A, data);
 
-        cpu.A = cpu.A + data;
+        gb.processor.A = gb.processor.A + data;
 
-        cpu.zero_flag = (cpu.A == 0);
-        cpu.subtraction_flag = false;
+        gb.processor.zero_flag = (gb.processor.A == 0);
+        gb.processor.subtraction_flag = false;
     }
     else if constexpr(instruction_row == 0x00 && instruction_col == 0x01) {
-        cpu.carry_flag = carry_add(cpu.A, data, cpu.carry_flag);
-        cpu.half_carry_flag = half_carry_add(cpu.A, data, cpu.carry_flag);
+        gb.processor.carry_flag = carry_add(gb.processor.A, data, gb.processor.carry_flag);
+        gb.processor.half_carry_flag = half_carry_add(gb.processor.A, data, gb.processor.carry_flag);
 
-        cpu.A = cpu.A + data + cpu.carry_flag;
+        gb.processor.A = gb.processor.A + data + gb.processor.carry_flag;
 
-        cpu.zero_flag = (cpu.A == 0);
-        cpu.subtraction_flag = false;
+        gb.processor.zero_flag = (gb.processor.A == 0);
+        gb.processor.subtraction_flag = false;
     }
     else if constexpr(instruction_row == 0x10 && instruction_col == 0x00) {
-        cpu.carry_flag = carry_sub(cpu.A, data);
-        cpu.half_carry_flag = half_carry_sub(cpu.A, data);
+        gb.processor.carry_flag = carry_sub(gb.processor.A, data);
+        gb.processor.half_carry_flag = half_carry_sub(gb.processor.A, data);
 
-        cpu.A = cpu.A - data;
+        gb.processor.A = gb.processor.A - data;
 
-        cpu.zero_flag = (cpu.A == 0); 
-        cpu.subtraction_flag = true;
+        gb.processor.zero_flag = (gb.processor.A == 0); 
+        gb.processor.subtraction_flag = true;
     }
     else if constexpr(instruction_row == 0x10 && instruction_col == 0x01) {
-        cpu.carry_flag = carry_sub(cpu.A, data, cpu.carry_flag);
-        cpu.half_carry_flag = half_carry_sub(cpu.A, data, cpu.carry_flag);
+        gb.processor.carry_flag = carry_sub(gb.processor.A, data, gb.processor.carry_flag);
+        gb.processor.half_carry_flag = half_carry_sub(gb.processor.A, data, gb.processor.carry_flag);
 
-        cpu.A = cpu.A - data - cpu.carry_flag;
+        gb.processor.A = gb.processor.A - data - gb.processor.carry_flag;
 
-        cpu.zero_flag = (cpu.A == 0);
-        cpu.subtraction_flag = true;
+        gb.processor.zero_flag = (gb.processor.A == 0);
+        gb.processor.subtraction_flag = true;
     }
     else if constexpr(instruction_row == 0x20 && instruction_col == 0x00) {
-        cpu.A = cpu.A & data;
+        gb.processor.A = gb.processor.A & data;
     }
     else if constexpr(instruction_row == 0x20 && instruction_col == 0x01) {
-        cpu.A = cpu.A ^ data;
+        gb.processor.A = gb.processor.A ^ data;
     }
     else if constexpr(instruction_row == 0x30 && instruction_col == 0x00) {
-        cpu.A = cpu.A | data;
+        gb.processor.A = gb.processor.A | data;
     }
     else if constexpr(instruction_row == 0x30 && instruction_col == 0x01) {
-        cpu.zero_flag = (cpu.A == data);
-        cpu.subtraction_flag = true;
-        cpu.half_carry_flag = half_carry_sub(cpu.A, data);
-        cpu.carry_flag = carry_sub(cpu.A, data);
+        gb.processor.zero_flag = (gb.processor.A == data);
+        gb.processor.subtraction_flag = true;
+        gb.processor.half_carry_flag = half_carry_sub(gb.processor.A, data);
+        gb.processor.carry_flag = carry_sub(gb.processor.A, data);
     }
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x07, 0x17>
-void rotate_left(SM83::CPU& cpu) {
-    Byte most_significant_bit = (cpu.A >> 7);
+void rotate_left(GameBoy& gb) {
+    Byte most_significant_bit = (gb.processor.A >> 7);
     // Circular rotate
-    if constexpr(Opcode == 0x07) cpu.A = (cpu.A << 8) | (most_significant_bit);
+    if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A << 8) | (most_significant_bit);
     // Rotate through carry flag
-    else if constexpr(Opcode == 0x17) cpu.A = (cpu.A << 8) | (cpu.carry_flag);
+    else if constexpr(Opcode == 0x17) gb.processor.A = (gb.processor.A << 8) | (gb.processor.carry_flag);
 
-    cpu.carry_flag = most_significant_bit;
+    gb.processor.carry_flag = most_significant_bit;
 }
 
 // --- Dispatch table ---
 
-using InstructionFunc = void (*)(SM83::CPU&);
+using InstructionFunc = void (*)(GameBoy&);
 
 static const std::array<InstructionFunc, 256> instruction_handler = [](){
     std::array<InstructionFunc, 256> handler =
@@ -887,14 +887,14 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     return handler;
 }();
 
-void SM83::CPU::fetch_decode_execute() {
+void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {
-        Log::log<Log::Level::Debug>("Instruction Address {:#x}, ", this->program_counter);
-        Byte next_instruction = fetch(*this);
+        Log::log<Log::Level::Debug>("Instruction Address {:#x}, ", gb.processor.program_counter);
+        Byte next_instruction = fetch(gb);
 
-        std::invoke(instruction_handler[next_instruction], *this);
+        std::invoke(instruction_handler[next_instruction], gb);
         Log::log<Log::Level::Debug>("End instruction loop\n");
 
-        Log::log<Log::Level::Debug>("{}", this->print_state());
+        Log::log<Log::Level::Debug>("{}", gb.processor.print_state());
     }
 }

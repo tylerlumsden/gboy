@@ -41,5 +41,5 @@ GameBoy::GameBoy(Cartridge cartridge) : cart(cartridge) {
 }
 
 void GameBoy::run() {
-    this->processor.fetch_decode_execute();
-}   
+    SM83::fetch_decode_execute(*this);
+}

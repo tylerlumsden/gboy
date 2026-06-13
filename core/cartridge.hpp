@@ -6,34 +6,11 @@
 #include <bit>
 
 #include "data_types.hpp"
-<<<<<<< HEAD
-
-template<Double_Byte Size>
-struct WrappingView {
-    std::vector<Byte>& data;
-    Address offset;
-
-    Byte& operator[](Address addr) const {
-        if(addr > Size) {
-            throw std::out_of_range(std::format(
-                "WrappingView: attemped access to address {:#x}, larger than observed size {:#x}.", 
-                addr, Size
-            ));
-        }
-        return data[(addr + offset) % data.size()];
-    }
-};
-
-struct Rom {
-    std::vector<Byte> data;
-
-=======
 
 struct Rom {
     std::vector<Byte> data;
     
     // Stored here for convenience
->>>>>>> b8e817c (Finished MBC1 impl)
     std::size_t num_banks;
 
     Rom(std::vector<Byte> rom_data, std::size_t num_banks);
@@ -42,10 +19,7 @@ struct Rom {
 struct Ram {
     std::vector<Byte> data;
 
-<<<<<<< HEAD
-=======
     // Stored here for convenience
->>>>>>> b8e817c (Finished MBC1 impl)
     std::size_t num_banks;
 
     Ram(std::size_t num_banks);

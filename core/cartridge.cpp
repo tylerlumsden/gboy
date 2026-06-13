@@ -180,9 +180,7 @@ Ram::Ram(size_t num_banks) : num_banks(num_banks) {
     data.resize(0x2000 * num_banks);
 }
 
-Rom::Rom(std::vector<Byte> rom_data) : data(rom_data) {
-
-}
+Rom::Rom(std::vector<Byte> rom_data, std::size_t num_banks) : data(rom_data), num_banks(num_banks) {}
 
 /*
 void Rom::write_as_hex(std::ostream& out) {

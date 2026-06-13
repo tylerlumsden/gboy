@@ -158,10 +158,14 @@ Cartridge construct_cartridge(std::istream& rom_stream) {
     }
 
     Byte cartridge_type = data[0x0147];
+    Byte rom_bank_code = data[0x0148];
+    Byte ram_bank_code = data[0x0149];
     switch(cartridge_type) {
 
     case 0x01: {
-        return Cartridge{.impl = MBC1Cartridge{Rom(data), Ram()}};
+        return Cartridge{.impl = MBC1Cartridge{
+            Rom(data, rom_bank_size(rom_bank_code)), Ram(ram_bank_size(ram_bank_code))
+        }};
     }
 
     default:

@@ -25,6 +25,7 @@ struct Ram {
     Ram(std::size_t num_banks);
 };
 
+// TODO: Template this with HasRam, HasBattery and concept checks in the read/write
 struct MBC1Cartridge {
     Rom rom;
     Ram ram;

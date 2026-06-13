@@ -14,6 +14,20 @@ std::vector<Byte> read_data(std::istream& stream) {
     return data_vec;
 }
 
+template<typename CartridgeType>
+void write_func(CartridgeType& cartridge, Address addr, Byte data) {
+    throw std::invalid_argument(std::format(
+        "Cartridge: write_func not implemented."
+    ));
+}
+
+template<typename CartridgeType>
+Byte read_func(CartridgeType& cartridge, Address addr) {
+    throw std::invalid_argument(std::format(
+        "Cartridge: read_func not implemented."
+    ));
+}
+
 Cartridge construct_cartridge(std::istream& rom_stream) {
     std::vector<Byte> data = read_data(rom_stream);
 
@@ -26,6 +40,11 @@ Cartridge construct_cartridge(std::istream& rom_stream) {
 
     Byte cartridge_type = data[0x0147];
     switch(cartridge_type) {
+
+    case 0x01: {
+        return Cartridge{.impl = MBC1Cartridge{Rom(data), Ram()}};
+    }
+
     default:
         throw std::logic_error(std::format(
             "Cartridge: provided rom has invalid or unimplemented cartridge type {:#x}",
@@ -34,10 +53,10 @@ Cartridge construct_cartridge(std::istream& rom_stream) {
     }
 }
 
-Rom::Rom(std::istream& rom_stream) : 
-data(read_data(rom_stream)), 
-fixed_bank{data, 0}, 
-slotted_bank{data, 0x4000}  {
+Rom::Rom(std::vector<Byte> rom_data) : data(rom_data), 
+    fixed_bank{data, 0}, 
+    slotted_bank{data, 0x4000}  {
+        
     Byte bank_exponent = data[0x0148];
     if(!(0x0 <= bank_exponent && bank_exponent <= 0x5)) {
         throw std::invalid_argument(std::format(
@@ -48,6 +67,7 @@ slotted_bank{data, 0x4000}  {
     this->bank_bits = bank_exponent;
 }
 
+/*
 void Rom::write_as_hex(std::ostream& out) {
     constexpr size_t newline_step = 1;
     for(size_t i = 0; i < this->data.size(); ++i) {
@@ -57,3 +77,4 @@ void Rom::write_as_hex(std::ostream& out) {
         out << std::hex << i << " " << static_cast<int>(this->data[i]) << " ";
     }
 }
+*/

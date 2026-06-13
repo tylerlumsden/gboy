@@ -5,6 +5,7 @@
 #include <format>
 
 #include "data_types.hpp"
+#include "memory.hpp"
 
 template<Double_Byte Size>
 struct WrappingView {
@@ -33,16 +34,7 @@ struct Rom {
     const WrappingView<0x4000> fixed_bank;
     WrappingView<0x4000> slotted_bank;
 
-    void set_bank_id(Byte bank_id) {
-        bank_id = (bank_id & 0b00011111);
-        if(bank_id == 0x0) bank_id = 0x1;
-
-        this->slotted_bank.offset = bank_id * 0x4000;
-    }
-
-    void write_as_hex(std::ostream& out);
-
-    Rom(std::istream& rom_stream);
+    Rom(std::vector<Byte> rom_data);
 };
 
 struct Ram {
@@ -52,20 +44,16 @@ struct Ram {
     Ram() : slotted_bank(data.data(), 0x2000) {}
 };
 
-struct RawCartridge {
+struct MBC1Cartridge {
     Rom rom;
     Ram ram;
-};
-
-struct MBC1Cartridge {
-    RawCartridge data;
 };
 
 // Generic interface for the cartridge implementation.
 // In the future we may have several types of cartridges,
 // so this unifies them under the same interface.
 struct Cartridge {
-    RawCartridge impl;
+    MBC1Cartridge impl;
 };
 
 Cartridge construct_cartridge(std::istream& rom_stream);

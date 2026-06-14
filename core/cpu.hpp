@@ -1,14 +1,12 @@
 #pragma once
 
-#include "memory.hpp"
 #include "data_types.hpp"
+
 #include <format>
 #include <string>
 
 template <auto Val, auto... Candidates>
 constexpr bool is_one_of = ((Val == Candidates) || ...);
-
-struct GameBoy;
 
 namespace SM83 {
 
@@ -31,8 +29,6 @@ struct CPU {
     Address program_counter = 0x100;
 
     bool IME = 0x0;
-
-    MemoryBus addressable_space;
 
     std::string print_state() {
         return std::format(R"(
@@ -57,7 +53,5 @@ struct CPU {
         );
     }
 };
-
-void fetch_decode_execute(GameBoy& gb);
 
 }

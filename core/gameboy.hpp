@@ -4,7 +4,9 @@
 #include "cpu.hpp"
 #include "data_types.hpp"
 
-struct GameBoy { 
+namespace GB {
+
+struct GameBoy {
     Cartridge cart;
     std::array<Byte, 0xc000> memory_map;
 
@@ -13,5 +15,16 @@ struct GameBoy {
     void run();
 
     GameBoy(Cartridge cartridge);
-    GameBoy() = delete; 
+    GameBoy() = delete;
 };
+
+Byte read (GameBoy& gb, Address addr);
+void write(GameBoy& gb, Address addr, Byte data);
+
+}
+
+namespace SM83 {
+
+void fetch_decode_execute(GB::GameBoy& gb);
+
+}

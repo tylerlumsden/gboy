@@ -1,27 +1,23 @@
 #pragma once
 
-#include <functional>
 #include "data_types.hpp"
 
-struct MemoryBus {
-    std::function<void(Address, Byte)> write;
-    std::function<Byte(Address)> read;
+template <typename T>
+struct Proxy {
+    T& obj;
+    Address addr;
 
-    struct Proxy {
-        MemoryBus& bus;
-        Address addr;
+    Proxy& operator=(Byte data) {
+        write(obj, addr, data);
+        return *this;
+    }
 
-        Proxy& operator=(Byte data) {
-            bus.write(addr, data);
-            return *this;
-        }
-
-        operator Byte() const {
-            return bus.read(addr);
-        }
-    };
-
-    Proxy operator[](Address addr) {
-        return Proxy{*this, addr};
+    operator Byte() const {
+        return read(obj, addr);
     }
 };
+
+template <typename T>
+Proxy<T> memory_bus(T& obj, Address addr) {
+    return {obj, addr};
+}

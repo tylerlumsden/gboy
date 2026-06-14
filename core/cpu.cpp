@@ -2,10 +2,14 @@
 #include <array>
 #include <stdexcept>
 #include <format>
+#include <functional>
 
 #include "gameboy.hpp"
+#include "memory.hpp"
 #include "data_types.hpp"
 #include "log.hpp"
+
+using GB::GameBoy;
 
 // --- Utilities ---
 
@@ -79,7 +83,7 @@ static void byte_as_flags(GameBoy& gb, Byte data) {
 }
 
 static Byte fetch(GameBoy& gb) {
-    Byte retval = gb.processor.addressable_space.read(gb.processor.program_counter);
+    Byte retval = read(gb, gb.processor.program_counter);
     ++gb.processor.program_counter;
 
     Log::log<Log::Level::Debug>("Fetched byte {:#x}", retval);    
@@ -99,17 +103,17 @@ static void push(GameBoy& gb, Double_Byte data) {
 
 
     --gb.processor.stack_pointer;
-    gb.processor.addressable_space[gb.processor.stack_pointer] = high;
+    memory_bus(gb, gb.processor.stack_pointer) = high;
 
     --gb.processor.stack_pointer;
-    gb.processor.addressable_space[gb.processor.stack_pointer] = low;
+    memory_bus(gb, gb.processor.stack_pointer) = low;
 }
 
 static Double_Byte pop(GameBoy& gb) {
-    Byte low = gb.processor.addressable_space[gb.processor.stack_pointer];
+    Byte low = memory_bus(gb, gb.processor.stack_pointer);
     ++gb.processor.stack_pointer;
 
-    Byte high = gb.processor.addressable_space[gb.processor.stack_pointer];
+    Byte high = memory_bus(gb, gb.processor.stack_pointer);
     ++gb.processor.stack_pointer;
 
     return splice(high, low);
@@ -232,10 +236,10 @@ static void ld_address_a(GameBoy& gb) {
 
     constexpr Byte load_order = (Opcode & 0x0f);
     if constexpr(load_order == 0x02) {
-        gb.processor.addressable_space[address] = gb.processor.A;
+        memory_bus(gb, address) = gb.processor.A;
     }
     else if constexpr(load_order == 0x0a) {
-        gb.processor.A = gb.processor.addressable_space[address];
+        gb.processor.A = memory_bus(gb, address);
     }
 }
 
@@ -262,10 +266,10 @@ static void ld_address_a_misc(GameBoy& gb) {
 
     constexpr Byte load_order = (Opcode & 0xf0);
     if constexpr(load_order == 0xe0) {
-        gb.processor.addressable_space[address] = gb.processor.A;
+        memory_bus(gb, address) = gb.processor.A;
     }
     else if constexpr(load_order == 0xf0) {
-        gb.processor.A = gb.processor.addressable_space[address];
+        gb.processor.A = memory_bus(gb, address);
     }
 }
 
@@ -281,7 +285,7 @@ static void ld_register(GameBoy& gb) {
         else if constexpr(Regcode == 0b011) return static_cast<Byte&>(gb.processor.E);
         else if constexpr(Regcode == 0b100) return static_cast<Byte&>(gb.processor.H);
         else if constexpr(Regcode == 0b101) return static_cast<Byte&>(gb.processor.L);
-        else if constexpr(Regcode == 0b110) return gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)];
+        else if constexpr(Regcode == 0b110) return memory_bus(gb, splice(gb.processor.H, gb.processor.L));
         else if constexpr(Regcode == 0b111) return static_cast<Byte&>(gb.processor.A);
     };
 
@@ -302,7 +306,7 @@ static void ld_n8(GameBoy& gb) {
         if constexpr(Opcode == 0x1e) return static_cast<Byte&>(gb.processor.E);
         if constexpr(Opcode == 0x26) return static_cast<Byte&>(gb.processor.H);
         if constexpr(Opcode == 0x2e) return static_cast<Byte&>(gb.processor.L);
-        if constexpr(Opcode == 0x36) return gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)];
+        if constexpr(Opcode == 0x36) return memory_bus(gb, splice(gb.processor.H, gb.processor.L));
         if constexpr(Opcode == 0x3e) return static_cast<Byte&>(gb.processor.A);
     };
 
@@ -349,9 +353,9 @@ static void rst(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing rst {:#x}", Opcode);
     Byte high_byte = hi(gb.processor.program_counter);
     Byte low_byte = lo(gb.processor.program_counter);
-    gb.processor.addressable_space.write(gb.processor.stack_pointer, high_byte);
+    write(gb, gb.processor.stack_pointer, high_byte);
     --gb.processor.stack_pointer;
-    gb.processor.addressable_space.write(gb.processor.stack_pointer, low_byte);
+    write(gb, gb.processor.stack_pointer, low_byte);
     --gb.processor.stack_pointer;
 
     if constexpr(Opcode == 0xff) {
@@ -388,7 +392,7 @@ static void ldh(GameBoy& gb) {
 
         Address addr = splice(high_byte, low_byte);
 
-        gb.processor.addressable_space.write(addr, gb.processor.A);
+        write(gb, addr, gb.processor.A);
     }
 }
 
@@ -501,7 +505,7 @@ void inc_dec_single_register(GameBoy& gb) {
         if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(gb.processor.B);
         else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(gb.processor.D);
         else if constexpr(Opcode == 0x24 || Opcode == 0x25) return static_cast<Byte&>(gb.processor.H);
-        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)];
+        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return memory_bus(gb, splice(gb.processor.H, gb.processor.L));
         else if constexpr(Opcode == 0x0c || Opcode == 0x0d) return static_cast<Byte&>(gb.processor.C);
         else if constexpr(Opcode == 0x1c || Opcode == 0x1d) return static_cast<Byte&>(gb.processor.E);
         else if constexpr(Opcode == 0x2c || Opcode == 0x2d) return static_cast<Byte&>(gb.processor.L);
@@ -541,7 +545,7 @@ void arithmetic_register(GameBoy& gb) {
         else if constexpr(RegCode == 0x03) return gb.processor.E;
         else if constexpr(RegCode == 0x04) return gb.processor.H;
         else if constexpr(RegCode == 0x05) return gb.processor.L;
-        else if constexpr(RegCode == 0x06) return static_cast<Byte>(gb.processor.addressable_space[splice(gb.processor.H, gb.processor.L)]);
+        else if constexpr(RegCode == 0x06) return static_cast<Byte>(memory_bus(gb, splice(gb.processor.H, gb.processor.L)));
         else if constexpr(RegCode == 0x07) return gb.processor.A;
     }();
 

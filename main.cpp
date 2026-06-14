@@ -6,9 +6,11 @@
 
 int main() {
     try {
-        std::ifstream reader("resources/cpu_instrs.gb");
+        Cartridge game = construct_cartridge(std::ifstream("resources/cpu_instrs.gb"));
+        
+        write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
-        GB::GameBoy device(construct_cartridge(reader));
+        GB::GameBoy device(game);
         device.run();
     } catch(const std::exception& e) {
         std::cerr << "Fatal exception: " << e.what() << "\n";

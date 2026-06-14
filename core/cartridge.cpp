@@ -90,11 +90,13 @@ void write_func(CartridgeType& cartridge, Address addr, Byte data) {
         // Masked to two bits (other bits ignored)
         Byte bank_num = data & (0b00000011);
         cartridge.ram_bank_number = bank_num;
+    } 
+    else {
+        throw std::invalid_argument(std::format(
+            "Cartridge: Address {:#x} invalid or not implemented for cartridge write.",
+            addr
+        ));
     }
-    throw std::invalid_argument(std::format(
-        "Cartridge: Address {:#x} invalid or not implemented for cartridge write.",
-        addr
-    ));
 }
 
 template<typename CartridgeType>
@@ -139,15 +141,19 @@ Byte read_func(CartridgeType& cartridge, Address addr) {
     }
 }
 
-void Cartridge::write(Address addr, Byte data) {
-    write_func(this->impl, addr, data);
+namespace CART {
+
+void write(Cartridge& cart, Address addr, Byte data) {
+    write_func(cart, addr, data);
 }
 
-Byte Cartridge::read(Address addr) {
-    return read_func(this->impl, addr);
+Byte read(Cartridge& cart, Address addr) {
+    return read_func(cart, addr);
 }
 
-Cartridge construct_cartridge(std::istream& rom_stream) {
+}
+
+Cartridge construct_cartridge(std::istream&& rom_stream) {
     std::vector<Byte> data = read_data(rom_stream);
 
     if(data.size() < 0x0150) {
@@ -163,9 +169,9 @@ Cartridge construct_cartridge(std::istream& rom_stream) {
     switch(cartridge_type) {
 
     case 0x01: {
-        return Cartridge{.impl = MBC1Cartridge{
+        return MBC1Cartridge{
             Rom(data, rom_bank_size(rom_bank_code)), Ram(ram_bank_size(ram_bank_code))
-        }};
+        };
     }
 
     default:
@@ -181,15 +187,3 @@ Ram::Ram(size_t num_banks) : num_banks(num_banks) {
 }
 
 Rom::Rom(std::vector<Byte> rom_data, std::size_t num_banks) : data(rom_data), num_banks(num_banks) {}
-
-/*
-void Rom::write_as_hex(std::ostream& out) {
-    constexpr size_t newline_step = 1;
-    for(size_t i = 0; i < this->data.size(); ++i) {
-        if(i % newline_step == 0 && i != 0) {
-            out << "\n";
-        }
-        out << std::hex << i << " " << static_cast<int>(this->data[i]) << " ";
-    }
-}
-*/

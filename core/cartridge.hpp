@@ -1,11 +1,21 @@
 #pragma once
 
-#include <iosfwd>
+#include <iostream>
 #include <vector>
 #include <format>
 #include <bit>
 
 #include "data_types.hpp"
+
+inline void write_as_hex(std::vector<Byte> data, std::ostream&& out) {
+    constexpr size_t newline_step = 1;
+    for(size_t i = 0; i < data.size(); ++i) {
+        if(i % newline_step == 0 && i != 0) {
+            out << "\n";
+        }
+        out << std::hex << i << " " << static_cast<int>(data[i]) << " ";
+    }
+}
 
 struct Rom {
     std::vector<Byte> data;
@@ -40,11 +50,11 @@ struct MBC1Cartridge {
 // Generic interface for the cartridge implementation.
 // In the future we may have several types of cartridges,
 // so this unifies them under the same interface.
-struct Cartridge {
-    MBC1Cartridge impl;
+using Cartridge = MBC1Cartridge;
 
-    Byte read(Address addr);
-    void write(Address addr, Byte data);
-};
+namespace CART {
+void write(Cartridge& cart, Address addr, Byte data);
+Byte read(Cartridge& cart, Address addr);
+}
 
-Cartridge construct_cartridge(std::istream& rom_stream);
+Cartridge construct_cartridge(std::istream&& rom_stream);

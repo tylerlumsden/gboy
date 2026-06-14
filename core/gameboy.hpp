@@ -8,7 +8,7 @@ namespace GB {
 
 struct GameBoy {
     Cartridge cart;
-    std::array<Byte, 0xc000> memory_map;
+    std::array<Byte, 0xffff> memory_map;
 
     SM83::CPU processor;
 
@@ -18,7 +18,7 @@ struct GameBoy {
     GameBoy() = delete;
 };
 
-Byte read (GameBoy& gb, Address addr);
+Byte read(GameBoy& gb, Address addr);
 void write(GameBoy& gb, Address addr, Byte data);
 
 }

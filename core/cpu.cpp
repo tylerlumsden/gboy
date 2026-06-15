@@ -11,10 +11,12 @@
 
 using GB::GameBoy;
 
+namespace {
+
 // --- Utilities ---
 
 template <std::convertible_to<Byte>... Operands>
-static bool half_carry_add(Byte a, Operands... operands) {
+bool half_carry_add(Byte a, Operands... operands) {
     std::array<Byte, sizeof...(operands)> operand_array{operands...};
     Byte running_sum = a;
     for(Byte operand : operand_array) {
@@ -27,7 +29,7 @@ static bool half_carry_add(Byte a, Operands... operands) {
 }
 
 template <std::convertible_to<Byte>... Operands>
-static bool carry_add(Byte a, Operands... operands) {
+bool carry_add(Byte a, Operands... operands) {
     std::array<Byte, sizeof...(operands)> operand_array{operands...};
     Byte running_sum = a;
     for(Byte operand : operand_array) {
@@ -40,7 +42,7 @@ static bool carry_add(Byte a, Operands... operands) {
 }
 
 template <std::convertible_to<Byte>... Operands>
-static bool half_carry_sub(Byte a, Operands... operands) {
+bool half_carry_sub(Byte a, Operands... operands) {
     std::array<Byte, sizeof...(operands)> operand_array{operands...};
     Byte running_sum = a;
     for(Byte operand : operand_array) {
@@ -53,7 +55,7 @@ static bool half_carry_sub(Byte a, Operands... operands) {
 }
 
 template <std::convertible_to<Byte>... Operands>
-static bool carry_sub(Byte a, Operands... operands) {
+bool carry_sub(Byte a, Operands... operands) {
     std::array<Byte, sizeof...(operands)> operand_array{operands...};
     Byte running_sum = a;
     for(Byte operand : operand_array) {
@@ -65,7 +67,7 @@ static bool carry_sub(Byte a, Operands... operands) {
     return false;
 }
 
-static Byte flags_as_byte(GameBoy& gb) {
+Byte flags_as_byte(GameBoy& gb) {
     Byte flags = 0x0;
     flags |= (gb.processor.carry_flag << 4);
     flags |= (gb.processor.half_carry_flag << 5);
@@ -75,14 +77,14 @@ static Byte flags_as_byte(GameBoy& gb) {
     return flags;
 }
 
-static void byte_as_flags(GameBoy& gb, Byte data) {
+void byte_as_flags(GameBoy& gb, Byte data) {
     gb.processor.carry_flag = (data & 0b00010000);
     gb.processor.half_carry_flag = (data & 0b00100000);
     gb.processor.subtraction_flag = (data & 0b01000000);
     gb.processor.zero_flag = (data & 0b10000000);
 }
 
-static Byte fetch(GameBoy& gb) {
+Byte fetch(GameBoy& gb) {
     Byte retval = read(gb, gb.processor.program_counter);
     ++gb.processor.program_counter;
 
@@ -90,14 +92,14 @@ static Byte fetch(GameBoy& gb) {
     return retval;
 }
 
-static Double_Byte fetch_double(GameBoy& gb) {
+Double_Byte fetch_double(GameBoy& gb) {
     Byte low = fetch(gb);
     Byte high = fetch(gb);
     
     return splice(high, low);
 }
 
-static void push(GameBoy& gb, Double_Byte data) {
+void push(GameBoy& gb, Double_Byte data) {
     Byte high = hi(data);
     Byte low = lo(data);
 
@@ -109,7 +111,7 @@ static void push(GameBoy& gb, Double_Byte data) {
     memory_bus(gb, gb.processor.stack_pointer) = low;
 }
 
-static Double_Byte pop(GameBoy& gb) {
+Double_Byte pop(GameBoy& gb) {
     Byte low = memory_bus(gb, gb.processor.stack_pointer);
     ++gb.processor.stack_pointer;
 
@@ -122,16 +124,16 @@ static Double_Byte pop(GameBoy& gb) {
 // --- Instructions ---
 
 template<Byte Opcode>
-static void no_impl(GameBoy& gb) {
+void no_impl(GameBoy& gb) {
     throw std::logic_error(std::format("Opcode with byte value {:#x} is not implemented.\n", Opcode));
 }
 
 template<Byte Opcode>
-static void cb_no_impl(GameBoy& gb) {
+void cb_no_impl(GameBoy& gb) {
     throw std::logic_error(std::format("cb-prefixed Opcode with byte value {:#x} is not implemented.\n", Opcode));
 }
 
-static void nop(GameBoy& gb) {
+void nop(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing nop {:#x}", 0x00);
     // Should use 4 cycles
 }
@@ -139,7 +141,7 @@ static void nop(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>
-static void jp(GameBoy& gb) {
+void jp(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing jp {:#x}", 0xc3);
 
     auto data_call = [&]() {
@@ -167,7 +169,7 @@ static void jp(GameBoy& gb) {
 }
 
 // TODO: implement variants
-static void cp_n8(GameBoy& gb) {
+void cp_n8(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing cp_n8 {:#x}", 0xfe);
     Byte num = fetch(gb);
 
@@ -180,7 +182,7 @@ static void cp_n8(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x20, 0x30, 0x18, 0x28, 0x38>
-static void jr(GameBoy& gb) {
+void jr(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing jr {:#x}", Opcode);
     Signed_Byte relative_address = fetch(gb);
     if constexpr(Opcode == 0x20) {
@@ -203,21 +205,21 @@ static void jr(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void x_or(GameBoy& gb) {
+void x_or(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing x_or {:#x}", Opcode);
     if constexpr(Opcode == 0xaf) {
         gb.processor.A = gb.processor.A ^ gb.processor.A;
     }
 }
 
-static void di(GameBoy& gb) {
+void di(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing di {:#x}", 0xf3);
     gb.processor.IME = false;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x02, 0x0a, 0x12, 0x1a, 0x22, 0x2a, 0x32, 0x3a>
-static void ld_address_a(GameBoy& gb) {
+void ld_address_a(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_address_a {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0xf0);
     Address address = [&]() {
@@ -250,7 +252,7 @@ static void ld_address_a(GameBoy& gb) {
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xe0, 0xe2, 0xea, 0xf0, 0xf2, 0xfa>
-static void ld_address_a_misc(GameBoy& gb) {
+void ld_address_a_misc(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_address_a_misc {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0x0f);
     Address address = [&]() {
@@ -281,7 +283,7 @@ static void ld_address_a_misc(GameBoy& gb) {
 
 
 template<Byte Opcode>
-static void ld_register(GameBoy& gb) {
+void ld_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_register {:#x}", Opcode);
     decltype(auto) register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
         if constexpr(Regcode == 0b000) return static_cast<Byte&>(gb.processor.B);
@@ -302,7 +304,7 @@ static void ld_register(GameBoy& gb) {
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>
-static void ld_n8(GameBoy& gb) {
+void ld_n8(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_n8 {:#x}", Opcode);
     decltype(auto) load_dest = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x06) return static_cast<Byte&>(gb.processor.B);
@@ -320,7 +322,7 @@ static void ld_n8(GameBoy& gb) {
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x01, 0x11, 0x21, 0x31>
-static void ld_n16(GameBoy& gb) {
+void ld_n16(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ld_n16 {:#x}", Opcode);
     Byte low = fetch(gb);
     Byte high = fetch(gb);
@@ -341,7 +343,7 @@ static void ld_n16(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void swap(GameBoy& gb) {
+void swap(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing swap {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
         if constexpr(Opcode == 0x31) return gb.processor.A;
@@ -354,7 +356,7 @@ static void swap(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void rst(GameBoy& gb) {
+void rst(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing rst {:#x}", Opcode);
     Byte high_byte = hi(gb.processor.program_counter);
     Byte low_byte = lo(gb.processor.program_counter);
@@ -370,7 +372,7 @@ static void rst(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void inc(GameBoy& gb) {
+void inc(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing inc {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
         if constexpr(Opcode == 0x3c) return gb.processor.A;
@@ -381,7 +383,7 @@ static void inc(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void ldh(GameBoy& gb) {
+void ldh(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ldh {:#x}", Opcode);
     if constexpr(Opcode == 0xe0) {
         Byte low_byte = fetch(gb);
@@ -396,7 +398,7 @@ static void ldh(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
-static void call(GameBoy& gb) {
+void call(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing call {:#x}", Opcode);
     if constexpr(Opcode == 0xc4) {
         if(gb.processor.zero_flag) return;
@@ -422,7 +424,7 @@ static void call(GameBoy& gb) {
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc5, 0xd5, 0xe5, 0xf5>
-static void push_register(GameBoy& gb) {
+void push_register(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing push_register {:#x}", Opcode);
     Double_Byte push_data = [&]() {
         if constexpr(Opcode == 0xc5) return splice(gb.processor.B, gb.processor.C);
@@ -661,7 +663,7 @@ constexpr void bind_range(std::array<InstructionFunc, 256>& handler, Make make) 
     }(std::make_index_sequence<Hi - Lo + 1>{});
 }
 
-static const std::array<InstructionFunc, 256> prefixed_instruction_handler = [](){
+const std::array<InstructionFunc, 256> prefixed_instruction_handler = [](){
     std::array<InstructionFunc, 256> handler =
     []<std::size_t... I>(std::index_sequence<I...>) {
         return std::array<InstructionFunc, 256>{ &cb_no_impl<I>... };
@@ -678,7 +680,7 @@ void cb_prefix(GameBoy& gb) {
     std::invoke(prefixed_instruction_handler[next_instruction], gb);
 }
 
-static const std::array<InstructionFunc, 256> instruction_handler = [](){
+const std::array<InstructionFunc, 256> instruction_handler = [](){
     std::array<InstructionFunc, 256> handler =
     []<std::size_t... I>(std::index_sequence<I...>) {
         return std::array<InstructionFunc, 256>{ &no_impl<I>... };
@@ -768,6 +770,8 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
 
     return handler;
 }();
+
+} // anonymous namespace
 
 void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {

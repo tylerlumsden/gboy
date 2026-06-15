@@ -169,17 +169,6 @@ void jp(GameBoy& gb) {
 }
 
 // TODO: implement variants
-void cp_n8(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cp_n8 {:#x}", 0xfe);
-    Byte num = fetch(gb);
-
-    gb.processor.zero_flag = (num == gb.processor.A);
-    gb.processor.subtraction_flag = true;
-    gb.processor.half_carry_flag = lo(num) > lo(gb.processor.A);
-    gb.processor.carry_flag = (num > gb.processor.A);
-}
-
-// TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x20, 0x30, 0x18, 0x28, 0x38>
 void jr(GameBoy& gb) {
@@ -644,33 +633,98 @@ void ret(GameBoy& gb) {
     if(flag) gb.processor.program_counter = pop(gb);
 }
 
+template<Byte Opcode, typename Func>
+inline constexpr void register_map_apply(GameBoy& gb, Func func) {
+    constexpr Byte Regcode = Opcode % 8;
+    if constexpr(Regcode == 0x0) func(gb.processor.B);
+    else if constexpr(Regcode == 0x1) func(gb.processor.C);
+    else if constexpr(Regcode == 0x2) func(gb.processor.D);
+    else if constexpr(Regcode == 0x3) func(gb.processor.E);
+    else if constexpr(Regcode == 0x4) func(gb.processor.H);
+    else if constexpr(Regcode == 0x5) func(gb.processor.L);
+    else if constexpr(Regcode == 0x6) func(memory_bus(gb, splice(gb.processor.H, gb.processor.L)));
+    else if constexpr(Regcode == 0x7) func(gb.processor.A);
+}
+
+template<Byte Opcode>
+    requires (0x38 <= Opcode && Opcode <= 0x3f)
+void shift_right_reset(GameBoy& gb) {
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        gb.processor.carry_flag = (memory >> 7);
+        memory = (memory >> 1);
+    });
+}
+
 // --- Dispatch table ---
 
 using InstructionFunc = void (*)(GameBoy&);
 
-// Bind an explicit set of opcodes to a single instruction template.
-// `make` maps a compile-time opcode to its handler, e.g. []<Byte Op>{ return &ret<Op>; }
-template<Byte... Ops, typename Make>
-constexpr void bind(std::array<InstructionFunc, 256>& handler, Make make) {
-    ((handler[Ops] = make.template operator()<Ops>()), ...);
-}
-
-// Bind a contiguous inclusive range of opcodes [Lo, Hi] to a single instruction template.
-template<Byte Lo, Byte Hi, typename Make>
-constexpr void bind_range(std::array<InstructionFunc, 256>& handler, Make make) {
-    [&]<std::size_t... Off>(std::index_sequence<Off...>) {
-        ((handler[Lo + Off] = make.template operator()<Byte(Lo + Off)>()), ...);
-    }(std::make_index_sequence<Hi - Lo + 1>{});
-}
-
-const std::array<InstructionFunc, 256> prefixed_instruction_handler = [](){
-    std::array<InstructionFunc, 256> handler =
-    []<std::size_t... I>(std::index_sequence<I...>) {
-        return std::array<InstructionFunc, 256>{ &cb_no_impl<I>... };
-    }(std::make_index_sequence<256>{});
-
-    return handler;
-}();
+const std::array<InstructionFunc, 256> prefixed_instruction_handler = {
+/* 0x00 */ &cb_no_impl<0x00>, &cb_no_impl<0x01>, &cb_no_impl<0x02>, &cb_no_impl<0x03>,
+/* 0x04 */ &cb_no_impl<0x04>, &cb_no_impl<0x05>, &cb_no_impl<0x06>, &cb_no_impl<0x07>,
+/* 0x08 */ &cb_no_impl<0x08>, &cb_no_impl<0x09>, &cb_no_impl<0x0a>, &cb_no_impl<0x0b>,
+/* 0x0c */ &cb_no_impl<0x0c>, &cb_no_impl<0x0d>, &cb_no_impl<0x0e>, &cb_no_impl<0x0f>,
+/* 0x10 */ &cb_no_impl<0x10>, &cb_no_impl<0x11>, &cb_no_impl<0x12>, &cb_no_impl<0x13>,
+/* 0x14 */ &cb_no_impl<0x14>, &cb_no_impl<0x15>, &cb_no_impl<0x16>, &cb_no_impl<0x17>,
+/* 0x18 */ &cb_no_impl<0x18>, &cb_no_impl<0x19>, &cb_no_impl<0x1a>, &cb_no_impl<0x1b>,
+/* 0x1c */ &cb_no_impl<0x1c>, &cb_no_impl<0x1d>, &cb_no_impl<0x1e>, &cb_no_impl<0x1f>,
+/* 0x20 */ &cb_no_impl<0x20>, &cb_no_impl<0x21>, &cb_no_impl<0x22>, &cb_no_impl<0x23>,
+/* 0x24 */ &cb_no_impl<0x24>, &cb_no_impl<0x25>, &cb_no_impl<0x26>, &cb_no_impl<0x27>,
+/* 0x28 */ &cb_no_impl<0x28>, &cb_no_impl<0x29>, &cb_no_impl<0x2a>, &cb_no_impl<0x2b>,
+/* 0x2c */ &cb_no_impl<0x2c>, &cb_no_impl<0x2d>, &cb_no_impl<0x2e>, &cb_no_impl<0x2f>,
+/* 0x30 */ &cb_no_impl<0x30>, &cb_no_impl<0x31>, &cb_no_impl<0x32>, &cb_no_impl<0x33>,
+/* 0x34 */ &cb_no_impl<0x34>, &cb_no_impl<0x35>, &cb_no_impl<0x36>, &cb_no_impl<0x37>,
+/* 0x38 */ &shift_right_reset<0x38>, &shift_right_reset<0x39>, &shift_right_reset<0x3a>, &shift_right_reset<0x3b>,
+/* 0x3c */ &shift_right_reset<0x3c>, &shift_right_reset<0x3d>, &shift_right_reset<0x3e>, &shift_right_reset<0x3f>,
+/* 0x40 */ &cb_no_impl<0x40>, &cb_no_impl<0x41>, &cb_no_impl<0x42>, &cb_no_impl<0x43>,
+/* 0x44 */ &cb_no_impl<0x44>, &cb_no_impl<0x45>, &cb_no_impl<0x46>, &cb_no_impl<0x47>,
+/* 0x48 */ &cb_no_impl<0x48>, &cb_no_impl<0x49>, &cb_no_impl<0x4a>, &cb_no_impl<0x4b>,
+/* 0x4c */ &cb_no_impl<0x4c>, &cb_no_impl<0x4d>, &cb_no_impl<0x4e>, &cb_no_impl<0x4f>,
+/* 0x50 */ &cb_no_impl<0x50>, &cb_no_impl<0x51>, &cb_no_impl<0x52>, &cb_no_impl<0x53>,
+/* 0x54 */ &cb_no_impl<0x54>, &cb_no_impl<0x55>, &cb_no_impl<0x56>, &cb_no_impl<0x57>,
+/* 0x58 */ &cb_no_impl<0x58>, &cb_no_impl<0x59>, &cb_no_impl<0x5a>, &cb_no_impl<0x5b>,
+/* 0x5c */ &cb_no_impl<0x5c>, &cb_no_impl<0x5d>, &cb_no_impl<0x5e>, &cb_no_impl<0x5f>,
+/* 0x60 */ &cb_no_impl<0x60>, &cb_no_impl<0x61>, &cb_no_impl<0x62>, &cb_no_impl<0x63>,
+/* 0x64 */ &cb_no_impl<0x64>, &cb_no_impl<0x65>, &cb_no_impl<0x66>, &cb_no_impl<0x67>,
+/* 0x68 */ &cb_no_impl<0x68>, &cb_no_impl<0x69>, &cb_no_impl<0x6a>, &cb_no_impl<0x6b>,
+/* 0x6c */ &cb_no_impl<0x6c>, &cb_no_impl<0x6d>, &cb_no_impl<0x6e>, &cb_no_impl<0x6f>,
+/* 0x70 */ &cb_no_impl<0x70>, &cb_no_impl<0x71>, &cb_no_impl<0x72>, &cb_no_impl<0x73>,
+/* 0x74 */ &cb_no_impl<0x74>, &cb_no_impl<0x75>, &cb_no_impl<0x76>, &cb_no_impl<0x77>,
+/* 0x78 */ &cb_no_impl<0x78>, &cb_no_impl<0x79>, &cb_no_impl<0x7a>, &cb_no_impl<0x7b>,
+/* 0x7c */ &cb_no_impl<0x7c>, &cb_no_impl<0x7d>, &cb_no_impl<0x7e>, &cb_no_impl<0x7f>,
+/* 0x80 */ &cb_no_impl<0x80>, &cb_no_impl<0x81>, &cb_no_impl<0x82>, &cb_no_impl<0x83>,
+/* 0x84 */ &cb_no_impl<0x84>, &cb_no_impl<0x85>, &cb_no_impl<0x86>, &cb_no_impl<0x87>,
+/* 0x88 */ &cb_no_impl<0x88>, &cb_no_impl<0x89>, &cb_no_impl<0x8a>, &cb_no_impl<0x8b>,
+/* 0x8c */ &cb_no_impl<0x8c>, &cb_no_impl<0x8d>, &cb_no_impl<0x8e>, &cb_no_impl<0x8f>,
+/* 0x90 */ &cb_no_impl<0x90>, &cb_no_impl<0x91>, &cb_no_impl<0x92>, &cb_no_impl<0x93>,
+/* 0x94 */ &cb_no_impl<0x94>, &cb_no_impl<0x95>, &cb_no_impl<0x96>, &cb_no_impl<0x97>,
+/* 0x98 */ &cb_no_impl<0x98>, &cb_no_impl<0x99>, &cb_no_impl<0x9a>, &cb_no_impl<0x9b>,
+/* 0x9c */ &cb_no_impl<0x9c>, &cb_no_impl<0x9d>, &cb_no_impl<0x9e>, &cb_no_impl<0x9f>,
+/* 0xa0 */ &cb_no_impl<0xa0>, &cb_no_impl<0xa1>, &cb_no_impl<0xa2>, &cb_no_impl<0xa3>,
+/* 0xa4 */ &cb_no_impl<0xa4>, &cb_no_impl<0xa5>, &cb_no_impl<0xa6>, &cb_no_impl<0xa7>,
+/* 0xa8 */ &cb_no_impl<0xa8>, &cb_no_impl<0xa9>, &cb_no_impl<0xaa>, &cb_no_impl<0xab>,
+/* 0xac */ &cb_no_impl<0xac>, &cb_no_impl<0xad>, &cb_no_impl<0xae>, &cb_no_impl<0xaf>,
+/* 0xb0 */ &cb_no_impl<0xb0>, &cb_no_impl<0xb1>, &cb_no_impl<0xb2>, &cb_no_impl<0xb3>,
+/* 0xb4 */ &cb_no_impl<0xb4>, &cb_no_impl<0xb5>, &cb_no_impl<0xb6>, &cb_no_impl<0xb7>,
+/* 0xb8 */ &cb_no_impl<0xb8>, &cb_no_impl<0xb9>, &cb_no_impl<0xba>, &cb_no_impl<0xbb>,
+/* 0xbc */ &cb_no_impl<0xbc>, &cb_no_impl<0xbd>, &cb_no_impl<0xbe>, &cb_no_impl<0xbf>,
+/* 0xc0 */ &cb_no_impl<0xc0>, &cb_no_impl<0xc1>, &cb_no_impl<0xc2>, &cb_no_impl<0xc3>,
+/* 0xc4 */ &cb_no_impl<0xc4>, &cb_no_impl<0xc5>, &cb_no_impl<0xc6>, &cb_no_impl<0xc7>,
+/* 0xc8 */ &cb_no_impl<0xc8>, &cb_no_impl<0xc9>, &cb_no_impl<0xca>, &cb_no_impl<0xcb>,
+/* 0xcc */ &cb_no_impl<0xcc>, &cb_no_impl<0xcd>, &cb_no_impl<0xce>, &cb_no_impl<0xcf>,
+/* 0xd0 */ &cb_no_impl<0xd0>, &cb_no_impl<0xd1>, &cb_no_impl<0xd2>, &cb_no_impl<0xd3>,
+/* 0xd4 */ &cb_no_impl<0xd4>, &cb_no_impl<0xd5>, &cb_no_impl<0xd6>, &cb_no_impl<0xd7>,
+/* 0xd8 */ &cb_no_impl<0xd8>, &cb_no_impl<0xd9>, &cb_no_impl<0xda>, &cb_no_impl<0xdb>,
+/* 0xdc */ &cb_no_impl<0xdc>, &cb_no_impl<0xdd>, &cb_no_impl<0xde>, &cb_no_impl<0xdf>,
+/* 0xe0 */ &cb_no_impl<0xe0>, &cb_no_impl<0xe1>, &cb_no_impl<0xe2>, &cb_no_impl<0xe3>,
+/* 0xe4 */ &cb_no_impl<0xe4>, &cb_no_impl<0xe5>, &cb_no_impl<0xe6>, &cb_no_impl<0xe7>,
+/* 0xe8 */ &cb_no_impl<0xe8>, &cb_no_impl<0xe9>, &cb_no_impl<0xea>, &cb_no_impl<0xeb>,
+/* 0xec */ &cb_no_impl<0xec>, &cb_no_impl<0xed>, &cb_no_impl<0xee>, &cb_no_impl<0xef>,
+/* 0xf0 */ &cb_no_impl<0xf0>, &cb_no_impl<0xf1>, &cb_no_impl<0xf2>, &cb_no_impl<0xf3>,
+/* 0xf4 */ &cb_no_impl<0xf4>, &cb_no_impl<0xf5>, &cb_no_impl<0xf6>, &cb_no_impl<0xf7>,
+/* 0xf8 */ &cb_no_impl<0xf8>, &cb_no_impl<0xf9>, &cb_no_impl<0xfa>, &cb_no_impl<0xfb>,
+/* 0xfc */ &cb_no_impl<0xfc>, &cb_no_impl<0xfd>, &cb_no_impl<0xfe>, &cb_no_impl<0xff>,
+};
 
 template<Byte Opcode>
     requires (Opcode == 0xcb)
@@ -680,96 +734,72 @@ void cb_prefix(GameBoy& gb) {
     std::invoke(prefixed_instruction_handler[next_instruction], gb);
 }
 
-const std::array<InstructionFunc, 256> instruction_handler = [](){
-    std::array<InstructionFunc, 256> handler =
-    []<std::size_t... I>(std::index_sequence<I...>) {
-        return std::array<InstructionFunc, 256>{ &no_impl<I>... };
-    }(std::make_index_sequence<256>{});
-
-    handler[0x0] = &nop;
-    handler[0xfe] = &cp_n8;
-    handler[0x28] = &jr<0x28>;
-    handler[0xaf] = &x_or<0xaf>;
-    handler[0x18] = &jr<0x18>;
-    handler[0xf3] = &di;
-    handler[0xff] = &rst<0xff>;
-    handler[0x3c] = &inc<0x3c>;
-    handler[0xe0] = &ldh<0xe0>;
-
-    //cb
-    handler[0xcb] = &cb_prefix<0xcb>;
-
-    // ret
-    bind<0xc0, 0xd0, 0xc8, 0xd8, 0xc9>(handler, []<Byte Op>{ return &ret<Op>; });
-
-    // jp
-    bind<0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>(handler, []<Byte Op>{ return &jp<Op>; });
-
-    // jr
-    bind<0x20, 0x30, 0x18, 0x28, 0x38>(handler, []<Byte Op>{ return &jr<Op>; });
-
-    // inc_double_register
-    bind<0x03, 0x13, 0x23>(handler, []<Byte Op>{ return &inc_dec_double_register<Op>; });
-
-    // inc_sp
-    handler[0x33] = &inc_sp<0x33>;
-
-    // dec_double_register
-    bind<0x0b, 0x1b, 0x2b>(handler, []<Byte Op>{ return &inc_dec_double_register<Op>; });
-
-    // dec_sp
-    handler[0x3b] = &dec_sp<0x3b>;
-
-    //inc_single_register
-    bind<0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c>(
-        handler, []<Byte Op>{ return &inc_dec_single_register<Op>; });
-
-    //dec_single_register
-    bind<0x05, 0x15, 0x25, 0x35, 0x0d, 0x1d, 0x2d, 0x3d>(
-        handler, []<Byte Op>{ return &inc_dec_single_register<Op>; });
-
-    // call
-    bind<0xc4, 0xd4, 0xcc, 0xdc, 0xcd>(handler, []<Byte Op>{ return &call<Op>; });
-
-    // ld_address_a
-    bind<0x02, 0x0a, 0x12, 0x1a, 0x22, 0x2a, 0x32, 0x3a>(
-        handler, []<Byte Op>{ return &ld_address_a<Op>; });
-
-    // ld_address_a_misc
-    bind<0xe0, 0xe2, 0xea, 0xf0, 0xf2, 0xfa>(
-        handler, []<Byte Op>{ return &ld_address_a_misc<Op>; });
-
-    // ld_n8
-    bind<0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>(
-        handler, []<Byte Op>{ return &ld_n8<Op>; });
-
-    // ld_n16
-    bind<0x01, 0x11, 0x21, 0x31>(handler, []<Byte Op>{ return &ld_n16<Op>; });
-
-    // pop_register
-    bind<0xc1, 0xd1, 0xe1, 0xf1>(handler, []<Byte Op>{ return &pop_register<Op>; });
-
-    // push_register
-    bind<0xc5, 0xd5, 0xe5, 0xf5>(handler, []<Byte Op>{ return &push_register<Op>; });
-
-    // arithmetic_register
-    bind_range<0x80, 0xbf>(handler, []<Byte Op>{ return &arithmetic_register<Op>; });
-
-    // Additional n8 arithmetic register
-    bind<0xc6, 0xd6, 0xe6, 0xf6, 0xce, 0xde, 0xee, 0xfe>(
-        handler, []<Byte Op>{ return &arithmetic_register<Op>; });
-
-    // Rotate
-    bind<0x07, 0x17>(handler, []<Byte Op>{ return &rotate_left<Op>; });
-    bind<0x0f, 0x1f>(handler, []<Byte Op>{ return &rotate_right<Op>; });
-
-    // ld_register
-    bind_range<0x40, 0x75>(handler, []<Byte Op>{ return &ld_register<Op>; });
-    // 0x76 is skipped -- it is a halt instruction
-    bind_range<0x77, 0x7f>(handler, []<Byte Op>{ return &ld_register<Op>; });
-
-    return handler;
-}();
+const std::array<InstructionFunc, 256> instruction_handler = {
+/* 0x00 */ &nop,                           &ld_n16<0x01>,                  &ld_address_a<0x02>,            &inc_dec_double_register<0x03>,
+/* 0x04 */ &inc_dec_single_register<0x04>, &inc_dec_single_register<0x05>, &ld_n8<0x06>,                   &rotate_left<0x07>,
+/* 0x08 */ &no_impl<0x08>,                 &no_impl<0x09>,                 &ld_address_a<0x0a>,            &inc_dec_double_register<0x0b>,
+/* 0x0c */ &inc_dec_single_register<0x0c>, &inc_dec_single_register<0x0d>, &ld_n8<0x0e>,                   &rotate_right<0x0f>,
+/* 0x10 */ &no_impl<0x10>,                 &ld_n16<0x11>,                  &ld_address_a<0x12>,            &inc_dec_double_register<0x13>,
+/* 0x14 */ &inc_dec_single_register<0x14>, &inc_dec_single_register<0x15>, &ld_n8<0x16>,                   &rotate_left<0x17>,
+/* 0x18 */ &jr<0x18>,                      &no_impl<0x19>,                 &ld_address_a<0x1a>,            &inc_dec_double_register<0x1b>,
+/* 0x1c */ &inc_dec_single_register<0x1c>, &inc_dec_single_register<0x1d>, &ld_n8<0x1e>,                   &rotate_right<0x1f>,
+/* 0x20 */ &jr<0x20>,                      &ld_n16<0x21>,                  &ld_address_a<0x22>,            &inc_dec_double_register<0x23>,
+/* 0x24 */ &inc_dec_single_register<0x24>, &inc_dec_single_register<0x25>, &ld_n8<0x26>,                   &no_impl<0x27>,
+/* 0x28 */ &jr<0x28>,                      &no_impl<0x29>,                 &ld_address_a<0x2a>,            &inc_dec_double_register<0x2b>,
+/* 0x2c */ &inc_dec_single_register<0x2c>, &inc_dec_single_register<0x2d>, &ld_n8<0x2e>,                   &no_impl<0x2f>,
+/* 0x30 */ &jr<0x30>,                      &ld_n16<0x31>,                  &ld_address_a<0x32>,            &inc_sp<0x33>,
+/* 0x34 */ &inc_dec_single_register<0x34>, &inc_dec_single_register<0x35>, &ld_n8<0x36>,                   &no_impl<0x37>,
+/* 0x38 */ &jr<0x38>,                      &no_impl<0x39>,                 &ld_address_a<0x3a>,            &dec_sp<0x3b>,
+/* 0x3c */ &inc_dec_single_register<0x3c>, &inc_dec_single_register<0x3d>, &ld_n8<0x3e>,                   &no_impl<0x3f>,
+/* 0x40 */ &ld_register<0x40>,             &ld_register<0x41>,             &ld_register<0x42>,             &ld_register<0x43>,
+/* 0x44 */ &ld_register<0x44>,             &ld_register<0x45>,             &ld_register<0x46>,             &ld_register<0x47>,
+/* 0x48 */ &ld_register<0x48>,             &ld_register<0x49>,             &ld_register<0x4a>,             &ld_register<0x4b>,
+/* 0x4c */ &ld_register<0x4c>,             &ld_register<0x4d>,             &ld_register<0x4e>,             &ld_register<0x4f>,
+/* 0x50 */ &ld_register<0x50>,             &ld_register<0x51>,             &ld_register<0x52>,             &ld_register<0x53>,
+/* 0x54 */ &ld_register<0x54>,             &ld_register<0x55>,             &ld_register<0x56>,             &ld_register<0x57>,
+/* 0x58 */ &ld_register<0x58>,             &ld_register<0x59>,             &ld_register<0x5a>,             &ld_register<0x5b>,
+/* 0x5c */ &ld_register<0x5c>,             &ld_register<0x5d>,             &ld_register<0x5e>,             &ld_register<0x5f>,
+/* 0x60 */ &ld_register<0x60>,             &ld_register<0x61>,             &ld_register<0x62>,             &ld_register<0x63>,
+/* 0x64 */ &ld_register<0x64>,             &ld_register<0x65>,             &ld_register<0x66>,             &ld_register<0x67>,
+/* 0x68 */ &ld_register<0x68>,             &ld_register<0x69>,             &ld_register<0x6a>,             &ld_register<0x6b>,
+/* 0x6c */ &ld_register<0x6c>,             &ld_register<0x6d>,             &ld_register<0x6e>,             &ld_register<0x6f>,
+/* 0x70 */ &ld_register<0x70>,             &ld_register<0x71>,             &ld_register<0x72>,             &ld_register<0x73>,
+/* 0x74 */ &ld_register<0x74>,             &ld_register<0x75>,             &no_impl<0x76>,                 &ld_register<0x77>,
+/* 0x78 */ &ld_register<0x78>,             &ld_register<0x79>,             &ld_register<0x7a>,             &ld_register<0x7b>,
+/* 0x7c */ &ld_register<0x7c>,             &ld_register<0x7d>,             &ld_register<0x7e>,             &ld_register<0x7f>,
+/* 0x80 */ &arithmetic_register<0x80>,     &arithmetic_register<0x81>,     &arithmetic_register<0x82>,     &arithmetic_register<0x83>,
+/* 0x84 */ &arithmetic_register<0x84>,     &arithmetic_register<0x85>,     &arithmetic_register<0x86>,     &arithmetic_register<0x87>,
+/* 0x88 */ &arithmetic_register<0x88>,     &arithmetic_register<0x89>,     &arithmetic_register<0x8a>,     &arithmetic_register<0x8b>,
+/* 0x8c */ &arithmetic_register<0x8c>,     &arithmetic_register<0x8d>,     &arithmetic_register<0x8e>,     &arithmetic_register<0x8f>,
+/* 0x90 */ &arithmetic_register<0x90>,     &arithmetic_register<0x91>,     &arithmetic_register<0x92>,     &arithmetic_register<0x93>,
+/* 0x94 */ &arithmetic_register<0x94>,     &arithmetic_register<0x95>,     &arithmetic_register<0x96>,     &arithmetic_register<0x97>,
+/* 0x98 */ &arithmetic_register<0x98>,     &arithmetic_register<0x99>,     &arithmetic_register<0x9a>,     &arithmetic_register<0x9b>,
+/* 0x9c */ &arithmetic_register<0x9c>,     &arithmetic_register<0x9d>,     &arithmetic_register<0x9e>,     &arithmetic_register<0x9f>,
+/* 0xa0 */ &arithmetic_register<0xa0>,     &arithmetic_register<0xa1>,     &arithmetic_register<0xa2>,     &arithmetic_register<0xa3>,
+/* 0xa4 */ &arithmetic_register<0xa4>,     &arithmetic_register<0xa5>,     &arithmetic_register<0xa6>,     &arithmetic_register<0xa7>,
+/* 0xa8 */ &arithmetic_register<0xa8>,     &arithmetic_register<0xa9>,     &arithmetic_register<0xaa>,     &arithmetic_register<0xab>,
+/* 0xac */ &arithmetic_register<0xac>,     &arithmetic_register<0xad>,     &arithmetic_register<0xae>,     &arithmetic_register<0xaf>,
+/* 0xb0 */ &arithmetic_register<0xb0>,     &arithmetic_register<0xb1>,     &arithmetic_register<0xb2>,     &arithmetic_register<0xb3>,
+/* 0xb4 */ &arithmetic_register<0xb4>,     &arithmetic_register<0xb5>,     &arithmetic_register<0xb6>,     &arithmetic_register<0xb7>,
+/* 0xb8 */ &arithmetic_register<0xb8>,     &arithmetic_register<0xb9>,     &arithmetic_register<0xba>,     &arithmetic_register<0xbb>,
+/* 0xbc */ &arithmetic_register<0xbc>,     &arithmetic_register<0xbd>,     &arithmetic_register<0xbe>,     &arithmetic_register<0xbf>,
+/* 0xc0 */ &ret<0xc0>,                     &pop_register<0xc1>,            &jp<0xc2>,                      &jp<0xc3>,
+/* 0xc4 */ &call<0xc4>,                    &push_register<0xc5>,           &arithmetic_register<0xc6>,     &no_impl<0xc7>,
+/* 0xc8 */ &ret<0xc8>,                     &ret<0xc9>,                     &jp<0xca>,                      &cb_prefix<0xcb>,
+/* 0xcc */ &call<0xcc>,                    &call<0xcd>,                    &arithmetic_register<0xce>,     &no_impl<0xcf>,
+/* 0xd0 */ &ret<0xd0>,                     &pop_register<0xd1>,            &jp<0xd2>,                      &no_impl<0xd3>,
+/* 0xd4 */ &call<0xd4>,                    &push_register<0xd5>,           &arithmetic_register<0xd6>,     &no_impl<0xd7>,
+/* 0xd8 */ &ret<0xd8>,                     &no_impl<0xd9>,                 &jp<0xda>,                      &no_impl<0xdb>,
+/* 0xdc */ &call<0xdc>,                    &no_impl<0xdd>,                 &arithmetic_register<0xde>,     &no_impl<0xdf>,
+/* 0xe0 */ &ld_address_a_misc<0xe0>,       &pop_register<0xe1>,            &ld_address_a_misc<0xe2>,       &no_impl<0xe3>,
+/* 0xe4 */ &no_impl<0xe4>,                 &push_register<0xe5>,           &arithmetic_register<0xe6>,     &no_impl<0xe7>,
+/* 0xe8 */ &no_impl<0xe8>,                 &jp<0xe9>,                      &ld_address_a_misc<0xea>,       &no_impl<0xeb>,
+/* 0xec */ &no_impl<0xec>,                 &no_impl<0xed>,                 &arithmetic_register<0xee>,     &no_impl<0xef>,
+/* 0xf0 */ &ld_address_a_misc<0xf0>,       &pop_register<0xf1>,            &ld_address_a_misc<0xf2>,       &di,
+/* 0xf4 */ &no_impl<0xf4>,                 &push_register<0xf5>,           &arithmetic_register<0xf6>,     &no_impl<0xf7>,
+/* 0xf8 */ &no_impl<0xf8>,                 &no_impl<0xf9>,                 &ld_address_a_misc<0xfa>,       &no_impl<0xfb>,
+/* 0xfc */ &no_impl<0xfc>,                 &no_impl<0xfd>,                 &arithmetic_register<0xfe>,     &rst<0xff>,
+};
 
 } // anonymous namespace
 

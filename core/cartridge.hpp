@@ -57,4 +57,6 @@ void write(Cartridge& cart, Address addr, Byte data);
 Byte read(Cartridge& cart, Address addr);
 }
 
+// We only allow an rvalue input stream here because the stream gets exhausted
+// and it feels dangerous to hold onto an empty input stream
 Cartridge construct_cartridge(std::istream&& rom_stream);

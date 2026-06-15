@@ -376,14 +376,6 @@ static void inc(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-static void ret(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
-
-    gb.processor.program_counter = pop(gb);
-}
-
-// TODO: implement variants
-template<Byte Opcode>
 static void ldh(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing ldh {:#x}", Opcode);
     if constexpr(Opcode == 0xe0) {
@@ -609,11 +601,38 @@ template<Byte Opcode>
 void rotate_left(GameBoy& gb) {
     Byte most_significant_bit = (gb.processor.A >> 7);
     // Circular rotate
-    if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A << 8) | (most_significant_bit);
+    if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A << 1) | (most_significant_bit);
     // Rotate through carry flag
-    else if constexpr(Opcode == 0x17) gb.processor.A = (gb.processor.A << 8) | (gb.processor.carry_flag);
+    else if constexpr(Opcode == 0x17) gb.processor.A = (gb.processor.A << 1) | (gb.processor.carry_flag);
 
     gb.processor.carry_flag = most_significant_bit;
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0x0f, 0x1f>
+void rotate_right(GameBoy& gb) {
+    Byte least_significant_bit = (gb.processor.A << 7);
+    // Circular rotate
+    if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A >> 1) | (least_significant_bit);
+    // Rotate through carry flag
+    else if constexpr(Opcode == 0x17) gb.processor.A = (gb.processor.A >> 1) | (gb.processor.carry_flag << 7);
+
+    gb.processor.carry_flag = least_significant_bit;
+}
+
+template<Byte Opcode>
+    requires is_one_of<Opcode, 0xc0, 0xd0, 0xc8, 0xd8, 0xc9>
+void ret(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
+    bool flag = [&]() {
+        if constexpr(Opcode == 0xc0) return !gb.processor.zero_flag;
+        else if constexpr(Opcode == 0xd0) return !gb.processor.carry_flag;
+        else if constexpr(Opcode == 0xc8) return gb.processor.zero_flag;
+        else if constexpr(Opcode == 0xd8) return gb.processor.carry_flag;
+        else if constexpr(Opcode == 0xc9) return true;
+    }();
+
+    if(flag) gb.processor.program_counter = pop(gb);
 }
 
 // --- Dispatch table ---
@@ -634,8 +653,14 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0xf3] = &di;
     handler[0xff] = &rst<0xff>;
     handler[0x3c] = &inc<0x3c>;
-    handler[0xc9] = &ret<0xc9>;
     handler[0xe0] = &ldh<0xe0>;
+
+    // ret
+    handler[0xc0] = &ret<0xc0>;
+    handler[0xd0] = &ret<0xd0>;
+    handler[0xc8] = &ret<0xc8>;
+    handler[0xd8] = &ret<0xd8>;
+    handler[0xc9] = &ret<0xc9>;
 
     // jp
     handler[0xc2] = &jp<0xc2>;
@@ -821,6 +846,9 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     // Rotate
     handler[0x07] = &rotate_left<0x07>;
     handler[0x17] = &rotate_left<0x17>;
+
+    handler[0x0f] = &rotate_right<0x0f>;
+    handler[0x1f] = &rotate_right<0x1f>;
 
     // ld_register
     handler[0x40] = &ld_register<0x40>;

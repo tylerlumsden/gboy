@@ -126,6 +126,11 @@ static void no_impl(GameBoy& gb) {
     throw std::logic_error(std::format("Opcode with byte value {:#x} is not implemented.\n", Opcode));
 }
 
+template<Byte Opcode>
+static void cb_no_impl(GameBoy& gb) {
+    throw std::logic_error(std::format("cb-prefixed Opcode with byte value {:#x} is not implemented.\n", Opcode));
+}
+
 static void nop(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing nop {:#x}", 0x00);
     // Should use 4 cycles
@@ -599,6 +604,7 @@ void arithmetic_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x07, 0x17>
 void rotate_left(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing rotate_left {:#x}", Opcode);
     Byte most_significant_bit = (gb.processor.A >> 7);
     // Circular rotate
     if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A << 1) | (most_significant_bit);
@@ -611,6 +617,7 @@ void rotate_left(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x0f, 0x1f>
 void rotate_right(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing rotate_right {:#x}", Opcode);
     Byte least_significant_bit = (gb.processor.A << 7);
     // Circular rotate
     if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A >> 1) | (least_significant_bit);
@@ -639,6 +646,38 @@ void ret(GameBoy& gb) {
 
 using InstructionFunc = void (*)(GameBoy&);
 
+// Bind an explicit set of opcodes to a single instruction template.
+// `make` maps a compile-time opcode to its handler, e.g. []<Byte Op>{ return &ret<Op>; }
+template<Byte... Ops, typename Make>
+constexpr void bind(std::array<InstructionFunc, 256>& handler, Make make) {
+    ((handler[Ops] = make.template operator()<Ops>()), ...);
+}
+
+// Bind a contiguous inclusive range of opcodes [Lo, Hi] to a single instruction template.
+template<Byte Lo, Byte Hi, typename Make>
+constexpr void bind_range(std::array<InstructionFunc, 256>& handler, Make make) {
+    [&]<std::size_t... Off>(std::index_sequence<Off...>) {
+        ((handler[Lo + Off] = make.template operator()<Byte(Lo + Off)>()), ...);
+    }(std::make_index_sequence<Hi - Lo + 1>{});
+}
+
+static const std::array<InstructionFunc, 256> prefixed_instruction_handler = [](){
+    std::array<InstructionFunc, 256> handler =
+    []<std::size_t... I>(std::index_sequence<I...>) {
+        return std::array<InstructionFunc, 256>{ &cb_no_impl<I>... };
+    }(std::make_index_sequence<256>{});
+
+    return handler;
+}();
+
+template<Byte Opcode>
+    requires (Opcode == 0xcb)
+void cb_prefix(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
+    Byte next_instruction = fetch(gb);
+    std::invoke(prefixed_instruction_handler[next_instruction], gb);
+}
+
 static const std::array<InstructionFunc, 256> instruction_handler = [](){
     std::array<InstructionFunc, 256> handler =
     []<std::size_t... I>(std::index_sequence<I...>) {
@@ -655,266 +694,77 @@ static const std::array<InstructionFunc, 256> instruction_handler = [](){
     handler[0x3c] = &inc<0x3c>;
     handler[0xe0] = &ldh<0xe0>;
 
+    //cb
+    handler[0xcb] = &cb_prefix<0xcb>;
+
     // ret
-    handler[0xc0] = &ret<0xc0>;
-    handler[0xd0] = &ret<0xd0>;
-    handler[0xc8] = &ret<0xc8>;
-    handler[0xd8] = &ret<0xd8>;
-    handler[0xc9] = &ret<0xc9>;
+    bind<0xc0, 0xd0, 0xc8, 0xd8, 0xc9>(handler, []<Byte Op>{ return &ret<Op>; });
 
     // jp
-    handler[0xc2] = &jp<0xc2>;
-    handler[0xd2] = &jp<0xd2>;
-    handler[0xc3] = &jp<0xc3>;
-    handler[0xe9] = &jp<0xe9>;
-    handler[0xca] = &jp<0xca>;
-    handler[0xda] = &jp<0xda>;
+    bind<0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>(handler, []<Byte Op>{ return &jp<Op>; });
 
     // jr
-    handler[0x20] = &jr<0x20>;
-    handler[0x30] = &jr<0x30>;
-    handler[0x18] = &jr<0x18>;
-    handler[0x28] = &jr<0x28>;
-    handler[0x38] = &jr<0x38>;
+    bind<0x20, 0x30, 0x18, 0x28, 0x38>(handler, []<Byte Op>{ return &jr<Op>; });
 
     // inc_double_register
-    handler[0x03] = &inc_dec_double_register<0x03>;
-    handler[0x13] = &inc_dec_double_register<0x13>;
-    handler[0x23] = &inc_dec_double_register<0x23>;
+    bind<0x03, 0x13, 0x23>(handler, []<Byte Op>{ return &inc_dec_double_register<Op>; });
 
     // inc_sp
     handler[0x33] = &inc_sp<0x33>;
 
     // dec_double_register
-    handler[0x0b] = &inc_dec_double_register<0x0b>;
-    handler[0x1b] = &inc_dec_double_register<0x1b>;
-    handler[0x2b] = &inc_dec_double_register<0x2b>;
+    bind<0x0b, 0x1b, 0x2b>(handler, []<Byte Op>{ return &inc_dec_double_register<Op>; });
 
     // dec_sp
     handler[0x3b] = &dec_sp<0x3b>;
 
     //inc_single_register
-    handler[0x04] = &inc_dec_single_register<0x04>;
-    handler[0x14] = &inc_dec_single_register<0x14>;
-    handler[0x24] = &inc_dec_single_register<0x24>;
-    handler[0x34] = &inc_dec_single_register<0x34>;
-    handler[0x0c] = &inc_dec_single_register<0x0c>;
-    handler[0x1c] = &inc_dec_single_register<0x1c>;
-    handler[0x2c] = &inc_dec_single_register<0x2c>;
-    handler[0x3c] = &inc_dec_single_register<0x3c>;
+    bind<0x04, 0x14, 0x24, 0x34, 0x0c, 0x1c, 0x2c, 0x3c>(
+        handler, []<Byte Op>{ return &inc_dec_single_register<Op>; });
 
     //dec_single_register
-    handler[0x05] = &inc_dec_single_register<0x05>;
-    handler[0x15] = &inc_dec_single_register<0x15>;
-    handler[0x25] = &inc_dec_single_register<0x25>;
-    handler[0x35] = &inc_dec_single_register<0x35>;
-    handler[0x0d] = &inc_dec_single_register<0x0d>;
-    handler[0x1d] = &inc_dec_single_register<0x1d>;
-    handler[0x2d] = &inc_dec_single_register<0x2d>;
-    handler[0x3d] = &inc_dec_single_register<0x3d>;
+    bind<0x05, 0x15, 0x25, 0x35, 0x0d, 0x1d, 0x2d, 0x3d>(
+        handler, []<Byte Op>{ return &inc_dec_single_register<Op>; });
 
     // call
-    handler[0xc4] = &call<0xc4>;
-    handler[0xd4] = &call<0xd4>;
-    handler[0xcc] = &call<0xcc>;
-    handler[0xdc] = &call<0xdc>;
-    handler[0xcd] = &call<0xcd>;
+    bind<0xc4, 0xd4, 0xcc, 0xdc, 0xcd>(handler, []<Byte Op>{ return &call<Op>; });
 
     // ld_address_a
-    handler[0x02] = &ld_address_a<0x02>;
-    handler[0x0a] = &ld_address_a<0x0a>;
-    handler[0x12] = &ld_address_a<0x12>;
-    handler[0x1a] = &ld_address_a<0x1a>;
-    handler[0x22] = &ld_address_a<0x22>;
-    handler[0x2a] = &ld_address_a<0x2a>;
-    handler[0x32] = &ld_address_a<0x32>;
-    handler[0x3a] = &ld_address_a<0x3a>;
+    bind<0x02, 0x0a, 0x12, 0x1a, 0x22, 0x2a, 0x32, 0x3a>(
+        handler, []<Byte Op>{ return &ld_address_a<Op>; });
 
     // ld_address_a_misc
-    handler[0xe0] = &ld_address_a_misc<0xe0>;
-    handler[0xe2] = &ld_address_a_misc<0xe2>;
-    handler[0xea] = &ld_address_a_misc<0xea>;
-    handler[0xf0] = &ld_address_a_misc<0xf0>;
-    handler[0xf2] = &ld_address_a_misc<0xf2>;
-    handler[0xfa] = &ld_address_a_misc<0xfa>;
+    bind<0xe0, 0xe2, 0xea, 0xf0, 0xf2, 0xfa>(
+        handler, []<Byte Op>{ return &ld_address_a_misc<Op>; });
 
     // ld_n8
-    handler[0x06] = &ld_n8<0x06>;
-    handler[0x0e] = &ld_n8<0x0e>;
-    handler[0x16] = &ld_n8<0x16>;
-    handler[0x1e] = &ld_n8<0x1e>;
-    handler[0x26] = &ld_n8<0x26>;
-    handler[0x2e] = &ld_n8<0x2e>;
-    handler[0x36] = &ld_n8<0x36>;
-    handler[0x3e] = &ld_n8<0x3e>;
-
+    bind<0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>(
+        handler, []<Byte Op>{ return &ld_n8<Op>; });
 
     // ld_n16
-    handler[0x01] = &ld_n16<0x01>;
-    handler[0x11] = &ld_n16<0x11>;
-    handler[0x21] = &ld_n16<0x21>;
-    handler[0x31] = &ld_n16<0x31>;
-    
+    bind<0x01, 0x11, 0x21, 0x31>(handler, []<Byte Op>{ return &ld_n16<Op>; });
+
     // pop_register
-    handler[0xc1] = &pop_register<0xc1>;
-    handler[0xd1] = &pop_register<0xd1>;
-    handler[0xe1] = &pop_register<0xe1>;
-    handler[0xf1] = &pop_register<0xf1>;
-    
+    bind<0xc1, 0xd1, 0xe1, 0xf1>(handler, []<Byte Op>{ return &pop_register<Op>; });
+
     // push_register
-    handler[0xc5] = &push_register<0xc5>;
-    handler[0xd5] = &push_register<0xd5>;
-    handler[0xe5] = &push_register<0xe5>;
-    handler[0xf5] = &push_register<0xf5>;
+    bind<0xc5, 0xd5, 0xe5, 0xf5>(handler, []<Byte Op>{ return &push_register<Op>; });
 
     // arithmetic_register
-    handler[0x80] = &arithmetic_register<0x80>;
-    handler[0x81] = &arithmetic_register<0x81>;
-    handler[0x82] = &arithmetic_register<0x82>;
-    handler[0x83] = &arithmetic_register<0x83>;
-    handler[0x84] = &arithmetic_register<0x84>;
-    handler[0x85] = &arithmetic_register<0x85>;
-    handler[0x86] = &arithmetic_register<0x86>;
-    handler[0x87] = &arithmetic_register<0x87>;
-    handler[0x88] = &arithmetic_register<0x88>;
-    handler[0x89] = &arithmetic_register<0x89>;
-    handler[0x8a] = &arithmetic_register<0x8a>;
-    handler[0x8b] = &arithmetic_register<0x8b>;
-    handler[0x8c] = &arithmetic_register<0x8c>;
-    handler[0x8d] = &arithmetic_register<0x8d>;
-    handler[0x8e] = &arithmetic_register<0x8e>;
-    handler[0x8f] = &arithmetic_register<0x8f>;
-    handler[0x90] = &arithmetic_register<0x90>;
-    handler[0x91] = &arithmetic_register<0x91>;
-    handler[0x92] = &arithmetic_register<0x92>;
-    handler[0x93] = &arithmetic_register<0x93>;
-    handler[0x94] = &arithmetic_register<0x94>;
-    handler[0x95] = &arithmetic_register<0x95>;
-    handler[0x96] = &arithmetic_register<0x96>;
-    handler[0x97] = &arithmetic_register<0x97>;
-    handler[0x98] = &arithmetic_register<0x98>;
-    handler[0x99] = &arithmetic_register<0x99>;
-    handler[0x9a] = &arithmetic_register<0x9a>;
-    handler[0x9b] = &arithmetic_register<0x9b>;
-    handler[0x9c] = &arithmetic_register<0x9c>;
-    handler[0x9d] = &arithmetic_register<0x9d>;
-    handler[0x9e] = &arithmetic_register<0x9e>;
-    handler[0x9f] = &arithmetic_register<0x9f>;
-    handler[0xa0] = &arithmetic_register<0xa0>;
-    handler[0xa1] = &arithmetic_register<0xa1>;
-    handler[0xa2] = &arithmetic_register<0xa2>;
-    handler[0xa3] = &arithmetic_register<0xa3>;
-    handler[0xa4] = &arithmetic_register<0xa4>;
-    handler[0xa5] = &arithmetic_register<0xa5>;
-    handler[0xa6] = &arithmetic_register<0xa6>;
-    handler[0xa7] = &arithmetic_register<0xa7>;
-    handler[0xa8] = &arithmetic_register<0xa8>;
-    handler[0xa9] = &arithmetic_register<0xa9>;
-    handler[0xaa] = &arithmetic_register<0xaa>;
-    handler[0xab] = &arithmetic_register<0xab>;
-    handler[0xac] = &arithmetic_register<0xac>;
-    handler[0xad] = &arithmetic_register<0xad>;
-    handler[0xae] = &arithmetic_register<0xae>;
-    handler[0xaf] = &arithmetic_register<0xaf>;
-    handler[0xb0] = &arithmetic_register<0xb0>;
-    handler[0xb1] = &arithmetic_register<0xb1>;
-    handler[0xb2] = &arithmetic_register<0xb2>;
-    handler[0xb3] = &arithmetic_register<0xb3>;
-    handler[0xb4] = &arithmetic_register<0xb4>;
-    handler[0xb5] = &arithmetic_register<0xb5>;
-    handler[0xb6] = &arithmetic_register<0xb6>;
-    handler[0xb7] = &arithmetic_register<0xb7>;
-    handler[0xb8] = &arithmetic_register<0xb8>;
-    handler[0xb9] = &arithmetic_register<0xb9>;
-    handler[0xba] = &arithmetic_register<0xba>;
-    handler[0xbb] = &arithmetic_register<0xbb>;
-    handler[0xbc] = &arithmetic_register<0xbc>;
-    handler[0xbd] = &arithmetic_register<0xbd>;
-    handler[0xbe] = &arithmetic_register<0xbe>;
-    handler[0xbf] = &arithmetic_register<0xbf>;
+    bind_range<0x80, 0xbf>(handler, []<Byte Op>{ return &arithmetic_register<Op>; });
 
     // Additional n8 arithmetic register
-    handler[0xc6] = &arithmetic_register<0xc6>;
-    handler[0xd6] = &arithmetic_register<0xd6>;
-    handler[0xe6] = &arithmetic_register<0xe6>;
-    handler[0xf6] = &arithmetic_register<0xf6>;
-    handler[0xce] = &arithmetic_register<0xce>;
-    handler[0xde] = &arithmetic_register<0xde>;
-    handler[0xee] = &arithmetic_register<0xee>;
-    handler[0xfe] = &arithmetic_register<0xfe>;
+    bind<0xc6, 0xd6, 0xe6, 0xf6, 0xce, 0xde, 0xee, 0xfe>(
+        handler, []<Byte Op>{ return &arithmetic_register<Op>; });
 
     // Rotate
-    handler[0x07] = &rotate_left<0x07>;
-    handler[0x17] = &rotate_left<0x17>;
-
-    handler[0x0f] = &rotate_right<0x0f>;
-    handler[0x1f] = &rotate_right<0x1f>;
+    bind<0x07, 0x17>(handler, []<Byte Op>{ return &rotate_left<Op>; });
+    bind<0x0f, 0x1f>(handler, []<Byte Op>{ return &rotate_right<Op>; });
 
     // ld_register
-    handler[0x40] = &ld_register<0x40>;
-    handler[0x41] = &ld_register<0x41>;
-    handler[0x42] = &ld_register<0x42>;
-    handler[0x43] = &ld_register<0x43>;
-    handler[0x44] = &ld_register<0x44>;
-    handler[0x45] = &ld_register<0x45>;
-    handler[0x46] = &ld_register<0x46>;
-    handler[0x47] = &ld_register<0x47>;
-    handler[0x48] = &ld_register<0x48>;
-    handler[0x49] = &ld_register<0x49>;
-    handler[0x4a] = &ld_register<0x4a>;
-    handler[0x4b] = &ld_register<0x4b>;
-    handler[0x4c] = &ld_register<0x4c>;
-    handler[0x4d] = &ld_register<0x4d>;
-    handler[0x4e] = &ld_register<0x4e>;
-    handler[0x4f] = &ld_register<0x4f>;
-    handler[0x50] = &ld_register<0x50>;
-    handler[0x51] = &ld_register<0x51>;
-    handler[0x52] = &ld_register<0x52>;
-    handler[0x53] = &ld_register<0x53>;
-    handler[0x54] = &ld_register<0x54>;
-    handler[0x55] = &ld_register<0x55>;
-    handler[0x56] = &ld_register<0x56>;
-    handler[0x57] = &ld_register<0x57>;
-    handler[0x58] = &ld_register<0x58>;
-    handler[0x59] = &ld_register<0x59>;
-    handler[0x5a] = &ld_register<0x5a>;
-    handler[0x5b] = &ld_register<0x5b>;
-    handler[0x5c] = &ld_register<0x5c>;
-    handler[0x5d] = &ld_register<0x5d>;
-    handler[0x5e] = &ld_register<0x5e>;
-    handler[0x5f] = &ld_register<0x5f>;
-    handler[0x60] = &ld_register<0x60>;
-    handler[0x61] = &ld_register<0x61>;
-    handler[0x62] = &ld_register<0x62>;
-    handler[0x63] = &ld_register<0x63>;
-    handler[0x64] = &ld_register<0x64>;
-    handler[0x65] = &ld_register<0x65>;
-    handler[0x66] = &ld_register<0x66>;
-    handler[0x67] = &ld_register<0x67>;
-    handler[0x68] = &ld_register<0x68>;
-    handler[0x69] = &ld_register<0x69>;
-    handler[0x6a] = &ld_register<0x6a>;
-    handler[0x6b] = &ld_register<0x6b>;
-    handler[0x6c] = &ld_register<0x6c>;
-    handler[0x6d] = &ld_register<0x6d>;
-    handler[0x6e] = &ld_register<0x6e>;
-    handler[0x6f] = &ld_register<0x6f>;
-    handler[0x70] = &ld_register<0x70>;
-    handler[0x71] = &ld_register<0x71>;
-    handler[0x72] = &ld_register<0x72>;
-    handler[0x73] = &ld_register<0x73>;
-    handler[0x74] = &ld_register<0x74>;
-    handler[0x75] = &ld_register<0x75>;
+    bind_range<0x40, 0x75>(handler, []<Byte Op>{ return &ld_register<Op>; });
     // 0x76 is skipped -- it is a halt instruction
-    handler[0x77] = &ld_register<0x77>;
-    handler[0x78] = &ld_register<0x78>;
-    handler[0x79] = &ld_register<0x79>;
-    handler[0x7a] = &ld_register<0x7a>;
-    handler[0x7b] = &ld_register<0x7b>;
-    handler[0x7c] = &ld_register<0x7c>;
-    handler[0x7d] = &ld_register<0x7d>;
-    handler[0x7e] = &ld_register<0x7e>;
-    handler[0x7f] = &ld_register<0x7f>;
+    bind_range<0x77, 0x7f>(handler, []<Byte Op>{ return &ld_register<Op>; });
 
     return handler;
 }();

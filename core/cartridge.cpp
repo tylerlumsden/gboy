@@ -3,6 +3,7 @@
 #include <format>
 
 #include "cartridge.hpp"
+#include "log.hpp"
 
 std::vector<Byte> read_data(std::istream& stream) {
     std::vector<Byte> data_vec;
@@ -110,20 +111,21 @@ Byte read_func(CartridgeType& cartridge, Address addr) {
     }
     else if(0x4000 <= addr && addr <= 0x7fff) {
         // See MBC1 in pandocs for this formula
+        Byte working_bank_number = cartridge.rom_bank_number;
+        if(working_bank_number == 0) working_bank_number = 1;
         Quad_Byte resolved_address = 
         (cartridge.ram_bank_number << 19) | 
         (cartridge.rom_bank_number << 14) | 
-        (addr - 0x4000);
+        (addr);
 
         resolved_address = chop_least(resolved_address, 14 + std::bit_width(cartridge.rom.num_banks - 1));
 
-        if(resolved_address == 0x0) resolved_address = 0x1;
-
+        Log::log<Log::Level::Debug>("Cartridge: Cartridge read returned resolved ROM address {:#x}", resolved_address);  
         return cartridge.rom.data.at(resolved_address);
     }
     else if(0xa000 <= addr && addr <= 0xbfff) {
         if(cartridge.ram_enable && cartridge.ram.num_banks > 0) {
-            Double_Byte resolved_address = (addr - 0xa000);
+            Double_Byte resolved_address = (addr);
             if(cartridge.bank_mode && cartridge.ram.num_banks > 1) {
                 resolved_address = (cartridge.ram_bank_number << 13) | resolved_address;
             }

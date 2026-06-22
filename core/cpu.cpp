@@ -332,19 +332,6 @@ void ld_n16(GameBoy& gb) {
 
 // TODO: implement variants
 template<Byte Opcode>
-void swap(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing swap {:#x}", Opcode);
-    Byte& data = [&]() -> Byte& {
-        if constexpr(Opcode == 0x31) return gb.processor.A;
-    }();
-
-    Byte push_high = (data << 4);
-    Byte push_low = (data >> 4);
-    data = (push_high | push_low);
-}
-
-// TODO: implement variants
-template<Byte Opcode>
 void rst(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing rst {:#x}", Opcode);
     Byte high_byte = hi(gb.processor.program_counter);
@@ -647,11 +634,86 @@ inline constexpr void register_map_apply(GameBoy& gb, Func func) {
 }
 
 template<Byte Opcode>
+    requires(0x00 <= Opcode && Opcode <= 0x07)
+void cb_rotate_left_carry(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb_rotate_left_carry {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte most_significant_bit = (memory & 0b10000000);
+        gb.processor.carry_flag = most_significant_bit;
+
+        memory = (memory << 1) | most_significant_bit;
+    });
+}
+
+template<Byte Opcode>   
+    requires(0x08 <= Opcode && Opcode <= 0x0f)
+void cb_rotate_right_carry(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb_rotate_right_carry {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte least_significant_bit = (memory & 0b00000001);
+        gb.processor.carry_flag = least_significant_bit;
+
+        memory = (memory >> 1) | least_significant_bit;
+    });
+}
+
+template<Byte Opcode>
+    requires(0x10 <= Opcode && Opcode <= 0x17)
+void cb_rotate_left(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb_rotate_left {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        memory = (memory << 1) | (gb.processor.carry_flag);
+    });
+}
+
+template<Byte Opcode>
+    requires(0x18 <= Opcode && Opcode <= 0x1f)
+void cb_rotate_right(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb_rotate_right {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        memory = (memory >> 1) | (gb.processor.carry_flag << 7);
+    });
+}
+
+template<Byte Opcode>
+    requires(0x20 <= Opcode && Opcode <= 0x27)
+void cb_shift_left_reset(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb_shift_left_reset {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte most_significant_bit = (memory & 0b10000000);
+        gb.processor.carry_flag = most_significant_bit;
+        memory = (memory << 1);
+    });
+}
+
+template<Byte Opcode>
+    requires(0x28 <= Opcode && Opcode <= 0x2f)
+void cb_shift_right(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb_shift_right {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte most_significant_bit = (memory & 0b10000000);
+        Byte least_significant_bit = (memory & 0b00000001);
+        gb.processor.carry_flag = least_significant_bit;
+        memory = (memory >> 1) | (most_significant_bit);
+    });
+}
+
+template<Byte Opcode>
     requires (0x38 <= Opcode && Opcode <= 0x3f)
-void shift_right_reset(GameBoy& gb) {
+void cb_shift_right_reset(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb shift_right_reset {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         gb.processor.carry_flag = (memory >> 7);
         memory = (memory >> 1);
+    });
+}
+
+template<Byte Opcode>
+    requires(0x30 <= Opcode && Opcode <= 0x37)
+void swap(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing cb swap {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        memory = (memory << 4) | (memory >> 4);
     });
 }
 
@@ -660,22 +722,22 @@ void shift_right_reset(GameBoy& gb) {
 using InstructionFunc = void (*)(GameBoy&);
 
 const std::array<InstructionFunc, 256> prefixed_instruction_handler = {
-/* 0x00 */ &cb_no_impl<0x00>, &cb_no_impl<0x01>, &cb_no_impl<0x02>, &cb_no_impl<0x03>,
-/* 0x04 */ &cb_no_impl<0x04>, &cb_no_impl<0x05>, &cb_no_impl<0x06>, &cb_no_impl<0x07>,
-/* 0x08 */ &cb_no_impl<0x08>, &cb_no_impl<0x09>, &cb_no_impl<0x0a>, &cb_no_impl<0x0b>,
-/* 0x0c */ &cb_no_impl<0x0c>, &cb_no_impl<0x0d>, &cb_no_impl<0x0e>, &cb_no_impl<0x0f>,
-/* 0x10 */ &cb_no_impl<0x10>, &cb_no_impl<0x11>, &cb_no_impl<0x12>, &cb_no_impl<0x13>,
-/* 0x14 */ &cb_no_impl<0x14>, &cb_no_impl<0x15>, &cb_no_impl<0x16>, &cb_no_impl<0x17>,
-/* 0x18 */ &cb_no_impl<0x18>, &cb_no_impl<0x19>, &cb_no_impl<0x1a>, &cb_no_impl<0x1b>,
-/* 0x1c */ &cb_no_impl<0x1c>, &cb_no_impl<0x1d>, &cb_no_impl<0x1e>, &cb_no_impl<0x1f>,
-/* 0x20 */ &cb_no_impl<0x20>, &cb_no_impl<0x21>, &cb_no_impl<0x22>, &cb_no_impl<0x23>,
-/* 0x24 */ &cb_no_impl<0x24>, &cb_no_impl<0x25>, &cb_no_impl<0x26>, &cb_no_impl<0x27>,
-/* 0x28 */ &cb_no_impl<0x28>, &cb_no_impl<0x29>, &cb_no_impl<0x2a>, &cb_no_impl<0x2b>,
-/* 0x2c */ &cb_no_impl<0x2c>, &cb_no_impl<0x2d>, &cb_no_impl<0x2e>, &cb_no_impl<0x2f>,
-/* 0x30 */ &cb_no_impl<0x30>, &cb_no_impl<0x31>, &cb_no_impl<0x32>, &cb_no_impl<0x33>,
-/* 0x34 */ &cb_no_impl<0x34>, &cb_no_impl<0x35>, &cb_no_impl<0x36>, &cb_no_impl<0x37>,
-/* 0x38 */ &shift_right_reset<0x38>, &shift_right_reset<0x39>, &shift_right_reset<0x3a>, &shift_right_reset<0x3b>,
-/* 0x3c */ &shift_right_reset<0x3c>, &shift_right_reset<0x3d>, &shift_right_reset<0x3e>, &shift_right_reset<0x3f>,
+/* 0x00 */ &cb_rotate_left_carry<0x00>, &cb_rotate_left_carry<0x01>, &cb_rotate_left_carry<0x02>, &cb_rotate_left_carry<0x03>,
+/* 0x04 */ &cb_rotate_left_carry<0x04>, &cb_rotate_left_carry<0x05>, &cb_rotate_left_carry<0x06>, &cb_rotate_left_carry<0x07>,
+/* 0x08 */ &cb_rotate_right_carry<0x08>, &cb_rotate_right_carry<0x09>, &cb_rotate_right_carry<0x0a>, &cb_rotate_right_carry<0x0b>,
+/* 0x0c */ &cb_rotate_right_carry<0x0c>, &cb_rotate_right_carry<0x0d>, &cb_rotate_right_carry<0x0e>, &cb_rotate_right_carry<0x0f>,
+/* 0x10 */ &cb_rotate_left<0x10>, &cb_rotate_left<0x11>, &cb_rotate_left<0x12>, &cb_rotate_left<0x13>,
+/* 0x14 */ &cb_rotate_left<0x14>, &cb_rotate_left<0x15>, &cb_rotate_left<0x16>, &cb_rotate_left<0x17>,
+/* 0x18 */ &cb_rotate_right<0x18>, &cb_rotate_right<0x19>, &cb_rotate_right<0x1a>, &cb_rotate_right<0x1b>,
+/* 0x1c */ &cb_rotate_right<0x1c>, &cb_rotate_right<0x1d>, &cb_rotate_right<0x1e>, &cb_rotate_right<0x1f>,
+/* 0x20 */ &cb_shift_left_reset<0x20>, &cb_shift_left_reset<0x21>, &cb_shift_left_reset<0x22>, &cb_shift_left_reset<0x23>,
+/* 0x24 */ &cb_shift_left_reset<0x24>, &cb_shift_left_reset<0x25>, &cb_shift_left_reset<0x26>, &cb_shift_left_reset<0x27>,
+/* 0x28 */ &cb_shift_right<0x28>, &cb_shift_right<0x29>, &cb_shift_right<0x2a>, &cb_shift_right<0x2b>,
+/* 0x2c */ &cb_shift_right<0x2c>, &cb_shift_right<0x2d>, &cb_shift_right<0x2e>, &cb_shift_right<0x2f>,
+/* 0x30 */ &swap<0x30>, &swap<0x31>, &swap<0x32>, &swap<0x33>,
+/* 0x34 */ &swap<0x34>, &swap<0x35>, &swap<0x36>, &swap<0x37>,
+/* 0x38 */ &cb_shift_right_reset<0x38>, &cb_shift_right_reset<0x39>, &cb_shift_right_reset<0x3a>, &cb_shift_right_reset<0x3b>,
+/* 0x3c */ &cb_shift_right_reset<0x3c>, &cb_shift_right_reset<0x3d>, &cb_shift_right_reset<0x3e>, &cb_shift_right_reset<0x3f>,
 /* 0x40 */ &cb_no_impl<0x40>, &cb_no_impl<0x41>, &cb_no_impl<0x42>, &cb_no_impl<0x43>,
 /* 0x44 */ &cb_no_impl<0x44>, &cb_no_impl<0x45>, &cb_no_impl<0x46>, &cb_no_impl<0x47>,
 /* 0x48 */ &cb_no_impl<0x48>, &cb_no_impl<0x49>, &cb_no_impl<0x4a>, &cb_no_impl<0x4b>,
@@ -811,6 +873,7 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
         std::invoke(instruction_handler[next_instruction], gb);
         Log::log<Log::Level::Debug>("End instruction loop\n");
 
-        Log::log<Log::Level::Debug>("{}", gb.processor.print_state());
+        Log::log<Log::Level::Debug>("{}", gb.print_state());
+
     }
 }

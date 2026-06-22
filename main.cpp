@@ -4,9 +4,13 @@
 #include "gameboy.hpp"
 #include "log.hpp"
 
-int main() {
+int main(int argc, char ** argv) {
     try {
-        Cartridge game = construct_cartridge(std::ifstream("resources/cpu_instrs.gb"));
+        if(argc < 2) {
+            throw std::invalid_argument("Requires path to gameboy rom.");
+        }
+
+        Cartridge game = construct_cartridge(std::ifstream(argv[1]));
         
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 

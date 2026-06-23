@@ -144,10 +144,10 @@ template<Byte Opcode>
 void jp(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing jp {:#x}", 0xc3);
 
-    auto data_call = [&]() {
+    Address jump_addr = [&]() {
         if constexpr(is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xca, 0xda>) return fetch_double(gb);
         else if constexpr(Opcode == 0xe9) return splice(gb.processor.H, gb.processor.L);
-    };
+    }();
 
     if constexpr(Opcode == 0xc2) {
         if(gb.processor.zero_flag) return;
@@ -165,7 +165,7 @@ void jp(GameBoy& gb) {
         if(!gb.processor.carry_flag) return;
     }
 
-    gb.processor.program_counter = data_call();
+    gb.processor.program_counter = jump_addr;
 }
 
 // TODO: implement variants
@@ -376,6 +376,8 @@ template<Byte Opcode>
     requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
 void call(GameBoy& gb) {
     Log::log<Log::Level::Debug>("Executing call {:#x}", Opcode);
+    Byte low_byte = fetch(gb);
+    Byte high_byte = fetch(gb);
     if constexpr(Opcode == 0xc4) {
         if(gb.processor.zero_flag) return;
     }
@@ -388,9 +390,6 @@ void call(GameBoy& gb) {
     else if constexpr(Opcode == 0xdc) {
         if(!gb.processor.carry_flag) return;
     }
-
-    Byte low_byte = fetch(gb);
-    Byte high_byte = fetch(gb);
 
     Address subroutine = splice(high_byte, low_byte);
 
@@ -873,7 +872,6 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
         std::invoke(instruction_handler[next_instruction], gb);
         Log::log<Log::Level::Debug>("End instruction loop\n");
 
-        Log::log<Log::Level::Debug>("{}", gb.print_state());
-
+        Log::log<Log::Level::Debug>("{}", gb.processor.print_state());
     }
 }

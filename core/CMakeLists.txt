@@ -5,7 +5,7 @@ add_library(core STATIC
 )
 
 if(NOT DEFINED LOG_LEVEL)
-    set(LOG_LEVEL 0)
+    set(LOG_LEVEL 1)
 endif()
 target_compile_definitions(core PUBLIC LOG_LEVEL=${LOG_LEVEL})
 

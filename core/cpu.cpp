@@ -88,7 +88,7 @@ Byte fetch(GameBoy& gb) {
     Byte retval = read(gb, gb.processor.program_counter);
     ++gb.processor.program_counter;
 
-    Log::log<Log::Level::Debug>("Fetched byte {:#x}", retval);    
+    Log::log<Log::Level::Verbose>("Fetched byte {:#x}", retval);    
     return retval;
 }
 
@@ -134,7 +134,7 @@ void cb_no_impl(GameBoy& gb) {
 }
 
 void nop(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing nop {:#x}", 0x00);
+    Log::log<Log::Level::Verbose>("Executing nop {:#x}", 0x00);
     // Should use 4 cycles
 }
 
@@ -142,7 +142,7 @@ void nop(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>
 void jp(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing jp {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing jp {:#x}", Opcode);
 
     Address jump_addr = [&]() {
         if constexpr(is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xca, 0xda>) return fetch_double(gb);
@@ -172,7 +172,7 @@ void jp(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x20, 0x30, 0x18, 0x28, 0x38>
 void jr(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing jr {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing jr {:#x}", Opcode);
     Signed_Byte relative_address = fetch(gb);
     if constexpr(Opcode == 0x20) {
         if(gb.processor.zero_flag) return;
@@ -195,21 +195,21 @@ void jr(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
 void x_or(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing x_or {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing x_or {:#x}", Opcode);
     if constexpr(Opcode == 0xaf) {
         gb.processor.A = gb.processor.A ^ gb.processor.A;
     }
 }
 
 void di(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing di {:#x}", 0xf3);
+    Log::log<Log::Level::Verbose>("Executing di {:#x}", 0xf3);
     gb.processor.IME = false;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x02, 0x0a, 0x12, 0x1a, 0x22, 0x2a, 0x32, 0x3a>
 void ld_address_a(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ld_address_a {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ld_address_a {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0xf0);
     Address address = [&]() {
         if constexpr(addr_type == 0x00) return splice(gb.processor.B, gb.processor.C);
@@ -242,7 +242,7 @@ void ld_address_a(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xe0, 0xe2, 0xea, 0xf0, 0xf2, 0xfa>
 void ld_address_a_misc(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ld_address_a_misc {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ld_address_a_misc {:#x}", Opcode);
     constexpr Byte addr_type = (Opcode & 0x0f);
     Address address = [&]() {
         if constexpr(addr_type == 0x00) {
@@ -273,7 +273,7 @@ void ld_address_a_misc(GameBoy& gb) {
 
 template<Byte Opcode>
 void ld_register(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ld_register {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ld_register {:#x}", Opcode);
     decltype(auto) register_mapping = [&]<Byte Regcode>() -> decltype(auto) {
         if constexpr(Regcode == 0b000) return static_cast<Byte&>(gb.processor.B);
         else if constexpr(Regcode == 0b001) return static_cast<Byte&>(gb.processor.C);
@@ -294,7 +294,7 @@ void ld_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>
 void ld_n8(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ld_n8 {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ld_n8 {:#x}", Opcode);
     decltype(auto) load_dest = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x06) return static_cast<Byte&>(gb.processor.B);
         if constexpr(Opcode == 0x0e) return static_cast<Byte&>(gb.processor.C);
@@ -312,7 +312,7 @@ void ld_n8(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x01, 0x11, 0x21, 0x31>
 void ld_n16(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ld_n16 {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ld_n16 {:#x}", Opcode);
     Byte low = fetch(gb);
     Byte high = fetch(gb);
 
@@ -333,7 +333,7 @@ void ld_n16(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
 void rst(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing rst {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing rst {:#x}", Opcode);
     Byte high_byte = hi(gb.processor.program_counter);
     Byte low_byte = lo(gb.processor.program_counter);
     write(gb, gb.processor.stack_pointer, high_byte);
@@ -349,7 +349,7 @@ void rst(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
 void inc(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing inc {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing inc {:#x}", Opcode);
     Byte& data = [&]() -> Byte& {
         if constexpr(Opcode == 0x3c) return gb.processor.A;
     }();
@@ -360,7 +360,7 @@ void inc(GameBoy& gb) {
 // TODO: implement variants
 template<Byte Opcode>
 void ldh(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ldh {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ldh {:#x}", Opcode);
     if constexpr(Opcode == 0xe0) {
         Byte low_byte = fetch(gb);
         Byte high_byte = 0xff;
@@ -375,7 +375,7 @@ void ldh(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
 void call(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing call {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing call {:#x}", Opcode);
     Byte low_byte = fetch(gb);
     Byte high_byte = fetch(gb);
     if constexpr(Opcode == 0xc4) {
@@ -400,7 +400,7 @@ void call(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc5, 0xd5, 0xe5, 0xf5>
 void push_register(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing push_register {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing push_register {:#x}", Opcode);
     Double_Byte push_data = [&]() {
         if constexpr(Opcode == 0xc5) return splice(gb.processor.B, gb.processor.C);
         else if constexpr(Opcode == 0xd5) return splice(gb.processor.D, gb.processor.E);
@@ -414,7 +414,7 @@ void push_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc1, 0xd1, 0xe1, 0xf1>
 void pop_register(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing pop_register {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing pop_register {:#x}", Opcode);
     Double_Byte data = pop(gb);
 
     if constexpr(Opcode == 0xc1) {
@@ -438,7 +438,7 @@ void pop_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x03, 0x13, 0x23, 0x0b, 0x1b, 0x2b>
 void inc_dec_double_register(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing inc_dec_double_register {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing inc_dec_double_register {:#x}", Opcode);
     auto [high_byte, low_byte] = [&]() -> std::pair<Byte&, Byte&> {
         if constexpr(hi(Opcode) == 0x0) return {gb.processor.B, gb.processor.C};
         else if constexpr(hi(Opcode) == 0x1) return {gb.processor.D, gb.processor.E};
@@ -457,14 +457,14 @@ void inc_dec_double_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x3b>
 void dec_sp(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing dec_sp {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing dec_sp {:#x}", Opcode);
     --gb.processor.stack_pointer;
 }
 
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x33>
 void inc_sp(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing inc_sp {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing inc_sp {:#x}", Opcode);
     ++gb.processor.stack_pointer;
 }
 
@@ -474,7 +474,7 @@ template<Byte Opcode>
         0x05, 0x15, 0x25, 0x35, 0x0d, 0x1d, 0x2d, 0x3d
     >
 void inc_dec_single_register(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing inc_dec_single_register {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing inc_dec_single_register {:#x}", Opcode);
     decltype(auto) data = [&]() -> decltype(auto) {
         if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(gb.processor.B);
         else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(gb.processor.D);
@@ -503,7 +503,7 @@ void inc_dec_single_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x09, 0x19, 0x29, 0x39>
 void arithmetic_hl_add(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing arithmetic_hl_add {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing arithmetic_hl_add {:#x}", Opcode);
     Double_Byte data = [&]() {
         if constexpr(Opcode == 0x09) return splice(gb.processor.B, gb.processor.C);
         else if constexpr(Opcode == 0x19) return splice(gb.processor.D, gb.processor.E);
@@ -528,7 +528,7 @@ template<Byte Opcode>
         is_one_of<Opcode, 0xc6, 0xd6, 0xe6, 0xf6, 0xce, 0xde, 0xee, 0xfe>
     )
 void arithmetic_register(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing arithmetic_register {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing arithmetic_register {:#x}", Opcode);
     Byte data = [&]() {
         // Additional n8 arithmetic instructions
         if constexpr((Opcode & 0xf0) > 0xb0) return fetch(gb);
@@ -620,7 +620,7 @@ void arithmetic_register(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x07, 0x17>
 void rotate_left(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing rotate_left {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing rotate_left {:#x}", Opcode);
     Byte most_significant_bit = (gb.processor.A >> 7);
     // Circular rotate
     if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A << 1) | (most_significant_bit);
@@ -633,7 +633,7 @@ void rotate_left(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0x0f, 0x1f>
 void rotate_right(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing rotate_right {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing rotate_right {:#x}", Opcode);
     Byte least_significant_bit = (gb.processor.A << 7);
     // Circular rotate
     if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A >> 1) | (least_significant_bit);
@@ -646,7 +646,7 @@ void rotate_right(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc0, 0xd0, 0xc8, 0xd8, 0xc9>
 void ret(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ret {:#x}", Opcode);
     bool flag = [&]() {
         if constexpr(Opcode == 0xc0) return !gb.processor.zero_flag;
         else if constexpr(Opcode == 0xd0) return !gb.processor.carry_flag;
@@ -656,6 +656,43 @@ void ret(GameBoy& gb) {
     }();
 
     if(flag) gb.processor.program_counter = pop(gb);
+}
+
+template<Byte Opcode>
+    requires(Opcode == 0x27)
+void daa(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing daa {:#x}", Opcode);
+    // Last operation was an addition
+    if(!gb.processor.subtraction_flag) {
+        if(gb.processor.carry_flag || gb.processor.A > 0x99) {
+            gb.processor.A += 0x60; 
+            gb.processor.carry_flag = true;
+        }
+
+        if(gb.processor.half_carry_flag || (gb.processor.A & 0x0F) > 0x09) {
+            gb.processor.A += 0x06;
+        }
+    }
+    // Last operation was a subtraction
+    else {
+        if(gb.processor.carry_flag) {
+            gb.processor.A -= 0x60;
+        }
+        if(gb.processor.half_carry_flag) {
+            gb.processor.A -= 0x06;
+        }
+    }
+    gb.processor.zero_flag = (gb.processor.A == 0);
+    gb.processor.half_carry_flag = false;
+}
+
+template<Byte Opcode>
+    requires(Opcode == 0x2f)
+void cpl(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing cpl {:#x}", Opcode);
+    gb.processor.A = ~gb.processor.A;
+    gb.processor.subtraction_flag = true;
+    gb.processor.half_carry_flag = true;
 }
 
 template<Byte Opcode, typename Func>
@@ -674,7 +711,7 @@ inline constexpr void register_map_apply(GameBoy& gb, Func func) {
 template<Byte Opcode>
     requires(0x00 <= Opcode && Opcode <= 0x07)
 void cb_rotate_left_carry(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb_rotate_left_carry {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb_rotate_left_carry {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte most_significant_bit = (memory & 0b10000000);
         gb.processor.carry_flag = most_significant_bit;
@@ -686,7 +723,7 @@ void cb_rotate_left_carry(GameBoy& gb) {
 template<Byte Opcode>   
     requires(0x08 <= Opcode && Opcode <= 0x0f)
 void cb_rotate_right_carry(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb_rotate_right_carry {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb_rotate_right_carry {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte least_significant_bit = (memory & 0b00000001);
         gb.processor.carry_flag = least_significant_bit;
@@ -698,7 +735,7 @@ void cb_rotate_right_carry(GameBoy& gb) {
 template<Byte Opcode>
     requires(0x10 <= Opcode && Opcode <= 0x17)
 void cb_rotate_left(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb_rotate_left {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb_rotate_left {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         memory = (memory << 1) | (gb.processor.carry_flag);
     });
@@ -707,7 +744,7 @@ void cb_rotate_left(GameBoy& gb) {
 template<Byte Opcode>
     requires(0x18 <= Opcode && Opcode <= 0x1f)
 void cb_rotate_right(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb_rotate_right {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb_rotate_right {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         memory = (memory >> 1) | (gb.processor.carry_flag << 7);
     });
@@ -716,7 +753,7 @@ void cb_rotate_right(GameBoy& gb) {
 template<Byte Opcode>
     requires(0x20 <= Opcode && Opcode <= 0x27)
 void cb_shift_left_reset(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb_shift_left_reset {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb_shift_left_reset {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte most_significant_bit = (memory & 0b10000000);
         gb.processor.carry_flag = most_significant_bit;
@@ -727,7 +764,7 @@ void cb_shift_left_reset(GameBoy& gb) {
 template<Byte Opcode>
     requires(0x28 <= Opcode && Opcode <= 0x2f)
 void cb_shift_right(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb_shift_right {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb_shift_right {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte most_significant_bit = (memory & 0b10000000);
         Byte least_significant_bit = (memory & 0b00000001);
@@ -739,7 +776,7 @@ void cb_shift_right(GameBoy& gb) {
 template<Byte Opcode>
     requires (0x38 <= Opcode && Opcode <= 0x3f)
 void cb_shift_right_reset(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb shift_right_reset {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb shift_right_reset {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         gb.processor.carry_flag = (memory >> 7);
         memory = (memory >> 1);
@@ -749,7 +786,7 @@ void cb_shift_right_reset(GameBoy& gb) {
 template<Byte Opcode>
     requires(0x30 <= Opcode && Opcode <= 0x37)
 void swap(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing cb swap {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing cb swap {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         memory = (memory << 4) | (memory >> 4);
     });
@@ -829,7 +866,7 @@ const std::array<InstructionFunc, 256> prefixed_instruction_handler = {
 template<Byte Opcode>
     requires (Opcode == 0xcb)
 void cb_prefix(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing ret {:#x}", Opcode);
+    Log::log<Log::Level::Verbose>("Executing ret {:#x}", Opcode);
     Byte next_instruction = fetch(gb);
     std::invoke(prefixed_instruction_handler[next_instruction], gb);
 }
@@ -844,9 +881,9 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0x18 */ &jr<0x18>,                      &arithmetic_hl_add<0x19>,       &ld_address_a<0x1a>,            &inc_dec_double_register<0x1b>,
 /* 0x1c */ &inc_dec_single_register<0x1c>, &inc_dec_single_register<0x1d>, &ld_n8<0x1e>,                   &rotate_right<0x1f>,
 /* 0x20 */ &jr<0x20>,                      &ld_n16<0x21>,                  &ld_address_a<0x22>,            &inc_dec_double_register<0x23>,
-/* 0x24 */ &inc_dec_single_register<0x24>, &inc_dec_single_register<0x25>, &ld_n8<0x26>,                   &no_impl<0x27>,
+/* 0x24 */ &inc_dec_single_register<0x24>, &inc_dec_single_register<0x25>, &ld_n8<0x26>,                   &daa<0x27>,
 /* 0x28 */ &jr<0x28>,                      &arithmetic_hl_add<0x29>,       &ld_address_a<0x2a>,            &inc_dec_double_register<0x2b>,
-/* 0x2c */ &inc_dec_single_register<0x2c>, &inc_dec_single_register<0x2d>, &ld_n8<0x2e>,                   &no_impl<0x2f>,
+/* 0x2c */ &inc_dec_single_register<0x2c>, &inc_dec_single_register<0x2d>, &ld_n8<0x2e>,                   &cpl<0x2f>,
 /* 0x30 */ &jr<0x30>,                      &ld_n16<0x31>,                  &ld_address_a<0x32>,            &inc_sp<0x33>,
 /* 0x34 */ &inc_dec_single_register<0x34>, &inc_dec_single_register<0x35>, &ld_n8<0x36>,                   &no_impl<0x37>,
 /* 0x38 */ &jr<0x38>,                      &arithmetic_hl_add<0x39>,       &ld_address_a<0x3a>,            &dec_sp<0x3b>,
@@ -903,14 +940,23 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 
 } // anonymous namespace
 
+void log_debug_state(GameBoy& gb) {
+    Log::log<Log::Level::Doctor>(R"(A:{:#x} F:{:#x} B:{:#x} C:{:#x} D:{:#x} E:{:#x} H:{:#x} L:{:#x} SP:{:#x} PC: {:#x} PCMEM:{:#x}{:#x}{:#x}{:#x})",
+        gb.processor.A, flags_as_byte(gb), gb.processor.B, gb.processor.C, gb.processor.D,
+        gb.processor.E, gb.processor.H, gb.processor.L, gb.processor.stack_pointer, gb.processor.program_counter,
+        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 1)),
+        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 3))
+    );
+}
+
 void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {
-        Log::log<Log::Level::Debug>("Instruction Address {:#x}, ", gb.processor.program_counter);
+        Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
         Byte next_instruction = fetch(gb);
 
         std::invoke(instruction_handler[next_instruction], gb);
-        Log::log<Log::Level::Debug>("End instruction loop\n");
+        Log::log<Log::Level::Verbose>("End instruction loop\n");
 
-        Log::log<Log::Level::Debug>("{}", gb.processor.print_state());
+        log_debug_state(gb);
     }
 }

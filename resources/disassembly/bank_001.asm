@@ -187,7 +187,7 @@ jr_001_40a3:
     ret
 
 
-    pop hl
+    pop hl // c0c2
     call $c0c7
     jp hl
 
@@ -1783,7 +1783,7 @@ jr_001_4799:
     call $c36d
 
 jr_001_479e:
-    push hl
+    push hl // intruction 0xc79e
     call $c0c2
     jr nc, jr_001_47d5
 

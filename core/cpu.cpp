@@ -142,7 +142,7 @@ void nop(GameBoy& gb) {
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xe9, 0xca, 0xda>
 void jp(GameBoy& gb) {
-    Log::log<Log::Level::Debug>("Executing jp {:#x}", 0xc3);
+    Log::log<Log::Level::Debug>("Executing jp {:#x}", Opcode);
 
     Address jump_addr = [&]() {
         if constexpr(is_one_of<Opcode, 0xc2, 0xd2, 0xc3, 0xca, 0xda>) return fetch_double(gb);
@@ -501,6 +501,28 @@ void inc_dec_single_register(GameBoy& gb) {
 }
 
 template<Byte Opcode>
+    requires is_one_of<Opcode, 0x09, 0x19, 0x29, 0x39>
+void arithmetic_hl_add(GameBoy& gb) {
+    Log::log<Log::Level::Debug>("Executing arithmetic_hl_add {:#x}", Opcode);
+    Double_Byte data = [&]() {
+        if constexpr(Opcode == 0x09) return splice(gb.processor.B, gb.processor.C);
+        else if constexpr(Opcode == 0x19) return splice(gb.processor.D, gb.processor.E);
+        else if constexpr(Opcode == 0x29) return splice(gb.processor.H, gb.processor.L);
+        else if constexpr(Opcode == 0x39) return gb.processor.stack_pointer;
+    }();
+
+    Double_Byte HL = splice(gb.processor.H, gb.processor.L);
+    Double_Byte sum = HL + data;
+
+    gb.processor.subtraction_flag = false;
+    gb.processor.half_carry_flag = (static_cast<Byte>(gb.processor.L + lo(data)) < gb.processor.L);
+    gb.processor.carry_flag = (static_cast<Double_Byte>(HL + data) < HL);
+
+    gb.processor.H = hi(sum);
+    gb.processor.L = lo(sum);
+}
+
+template<Byte Opcode>
     requires ( 
         (0x80 <= Opcode && Opcode <= 0xbf) ||
         is_one_of<Opcode, 0xc6, 0xd6, 0xe6, 0xf6, 0xce, 0xde, 0xee, 0xfe>
@@ -563,12 +585,29 @@ void arithmetic_register(GameBoy& gb) {
     }
     else if constexpr(instruction_row == 0x20 && instruction_col == 0x00) {
         gb.processor.A = gb.processor.A & data;
+
+        gb.processor.zero_flag = (gb.processor.A == 0);
+        gb.processor.subtraction_flag = false;
+        gb.processor.half_carry_flag = true;
+        gb.processor.carry_flag = false;
     }
     else if constexpr(instruction_row == 0x20 && instruction_col == 0x01) {
+        // For some reason no flags setting here?
         gb.processor.A = gb.processor.A ^ data;
+
+        gb.processor.zero_flag = (gb.processor.A == 0);
+        gb.processor.subtraction_flag = false;
+        gb.processor.half_carry_flag = false;
+        gb.processor.carry_flag = false;
     }
     else if constexpr(instruction_row == 0x30 && instruction_col == 0x00) {
+        // For some reason no flags setting here?
         gb.processor.A = gb.processor.A | data;
+
+        gb.processor.zero_flag = (gb.processor.A == 0);
+        gb.processor.subtraction_flag = false;
+        gb.processor.half_carry_flag = false;
+        gb.processor.carry_flag = false;
     }
     else if constexpr(instruction_row == 0x30 && instruction_col == 0x01) {
         gb.processor.zero_flag = (gb.processor.A == data);
@@ -798,19 +837,19 @@ void cb_prefix(GameBoy& gb) {
 const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0x00 */ &nop,                           &ld_n16<0x01>,                  &ld_address_a<0x02>,            &inc_dec_double_register<0x03>,
 /* 0x04 */ &inc_dec_single_register<0x04>, &inc_dec_single_register<0x05>, &ld_n8<0x06>,                   &rotate_left<0x07>,
-/* 0x08 */ &no_impl<0x08>,                 &no_impl<0x09>,                 &ld_address_a<0x0a>,            &inc_dec_double_register<0x0b>,
+/* 0x08 */ &no_impl<0x08>,                 &arithmetic_hl_add<0x09>,       &ld_address_a<0x0a>,            &inc_dec_double_register<0x0b>,
 /* 0x0c */ &inc_dec_single_register<0x0c>, &inc_dec_single_register<0x0d>, &ld_n8<0x0e>,                   &rotate_right<0x0f>,
 /* 0x10 */ &no_impl<0x10>,                 &ld_n16<0x11>,                  &ld_address_a<0x12>,            &inc_dec_double_register<0x13>,
 /* 0x14 */ &inc_dec_single_register<0x14>, &inc_dec_single_register<0x15>, &ld_n8<0x16>,                   &rotate_left<0x17>,
-/* 0x18 */ &jr<0x18>,                      &no_impl<0x19>,                 &ld_address_a<0x1a>,            &inc_dec_double_register<0x1b>,
+/* 0x18 */ &jr<0x18>,                      &arithmetic_hl_add<0x19>,       &ld_address_a<0x1a>,            &inc_dec_double_register<0x1b>,
 /* 0x1c */ &inc_dec_single_register<0x1c>, &inc_dec_single_register<0x1d>, &ld_n8<0x1e>,                   &rotate_right<0x1f>,
 /* 0x20 */ &jr<0x20>,                      &ld_n16<0x21>,                  &ld_address_a<0x22>,            &inc_dec_double_register<0x23>,
 /* 0x24 */ &inc_dec_single_register<0x24>, &inc_dec_single_register<0x25>, &ld_n8<0x26>,                   &no_impl<0x27>,
-/* 0x28 */ &jr<0x28>,                      &no_impl<0x29>,                 &ld_address_a<0x2a>,            &inc_dec_double_register<0x2b>,
+/* 0x28 */ &jr<0x28>,                      &arithmetic_hl_add<0x29>,       &ld_address_a<0x2a>,            &inc_dec_double_register<0x2b>,
 /* 0x2c */ &inc_dec_single_register<0x2c>, &inc_dec_single_register<0x2d>, &ld_n8<0x2e>,                   &no_impl<0x2f>,
 /* 0x30 */ &jr<0x30>,                      &ld_n16<0x31>,                  &ld_address_a<0x32>,            &inc_sp<0x33>,
 /* 0x34 */ &inc_dec_single_register<0x34>, &inc_dec_single_register<0x35>, &ld_n8<0x36>,                   &no_impl<0x37>,
-/* 0x38 */ &jr<0x38>,                      &no_impl<0x39>,                 &ld_address_a<0x3a>,            &dec_sp<0x3b>,
+/* 0x38 */ &jr<0x38>,                      &arithmetic_hl_add<0x39>,       &ld_address_a<0x3a>,            &dec_sp<0x3b>,
 /* 0x3c */ &inc_dec_single_register<0x3c>, &inc_dec_single_register<0x3d>, &ld_n8<0x3e>,                   &no_impl<0x3f>,
 /* 0x40 */ &ld_register<0x40>,             &ld_register<0x41>,             &ld_register<0x42>,             &ld_register<0x43>,
 /* 0x44 */ &ld_register<0x44>,             &ld_register<0x45>,             &ld_register<0x46>,             &ld_register<0x47>,

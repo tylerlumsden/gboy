@@ -33,7 +33,7 @@ bool carry_add(Byte a, Operands... operands) {
     std::array<Byte, sizeof...(operands)> operand_array{operands...};
     Byte running_sum = a;
     for(Byte operand : operand_array) {
-        if(running_sum + operand < running_sum) {
+        if(static_cast<Byte>(running_sum + operand) < running_sum) {
             return true;
         }
         running_sum += operand;
@@ -85,6 +85,7 @@ void byte_as_flags(GameBoy& gb, Byte data) {
 }
 
 Byte fetch(GameBoy& gb) {
+
     Byte retval = read(gb, gb.processor.program_counter);
     ++gb.processor.program_counter;
 
@@ -223,7 +224,7 @@ void ld_address_a(GameBoy& gb) {
         }
         else if constexpr(addr_type == 0x30) {
             Address addr = splice(gb.processor.H, gb.processor.L);
-            Address addr_decrement = addr + 1;
+            Address addr_decrement = addr - 1;
             gb.processor.H = hi(addr_decrement);
             gb.processor.L = lo(addr_decrement);
             return addr;
@@ -515,7 +516,7 @@ void arithmetic_hl_add(GameBoy& gb) {
     Double_Byte sum = HL + data;
 
     gb.processor.subtraction_flag = false;
-    gb.processor.half_carry_flag = (static_cast<Byte>(gb.processor.L + lo(data)) < gb.processor.L);
+    gb.processor.half_carry_flag = ((HL & 0x0fff) + (data & 0x0fff) > 0x0fff);
     gb.processor.carry_flag = (static_cast<Double_Byte>(HL + data) < HL);
 
     gb.processor.H = hi(sum);
@@ -557,11 +558,12 @@ void arithmetic_register(GameBoy& gb) {
         gb.processor.subtraction_flag = false;
     }
     else if constexpr(instruction_row == 0x00 && instruction_col == 0x01) {
-        gb.processor.carry_flag = carry_add(gb.processor.A, data, gb.processor.carry_flag);
+        bool new_carry_flag = carry_add(gb.processor.A, data, gb.processor.carry_flag);
         gb.processor.half_carry_flag = half_carry_add(gb.processor.A, data, gb.processor.carry_flag);
 
         gb.processor.A = gb.processor.A + data + gb.processor.carry_flag;
 
+        gb.processor.carry_flag = new_carry_flag;
         gb.processor.zero_flag = (gb.processor.A == 0);
         gb.processor.subtraction_flag = false;
     }
@@ -638,8 +640,11 @@ void rotate_right(GameBoy& gb) {
     // Circular rotate
     if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A >> 1) | (least_significant_bit);
     // Rotate through carry flag
-    else if constexpr(Opcode == 0x17) gb.processor.A = (gb.processor.A >> 1) | (gb.processor.carry_flag << 7);
+    else if constexpr(Opcode == 0x1f) gb.processor.A = (gb.processor.A >> 1) | (gb.processor.carry_flag << 7);
 
+    gb.processor.zero_flag = false;
+    gb.processor.half_carry_flag = false;
+    gb.processor.subtraction_flag = false;
     gb.processor.carry_flag = least_significant_bit;
 }
 
@@ -746,7 +751,14 @@ template<Byte Opcode>
 void cb_rotate_right(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_right {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        bool new_carry_flag = (memory & 0b00000001);
+
         memory = (memory >> 1) | (gb.processor.carry_flag << 7);
+
+        gb.processor.carry_flag = new_carry_flag;
+        gb.processor.zero_flag = (memory == 0);
+        gb.processor.half_carry_flag = false;
+        gb.processor.subtraction_flag = false;
     });
 }
 
@@ -778,8 +790,11 @@ template<Byte Opcode>
 void cb_shift_right_reset(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb shift_right_reset {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        gb.processor.carry_flag = (memory >> 7);
+        gb.processor.carry_flag = (memory & 0b00000001);
         memory = (memory >> 1);
+        gb.processor.zero_flag = (memory == 0);
+        gb.processor.half_carry_flag = false;
+        gb.processor.subtraction_flag = false;
     });
 }
 
@@ -941,7 +956,7 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 } // anonymous namespace
 
 void log_debug_state(GameBoy& gb) {
-    Log::log<Log::Level::Doctor>(R"(A:{:#x} F:{:#x} B:{:#x} C:{:#x} D:{:#x} E:{:#x} H:{:#x} L:{:#x} SP:{:#x} PC: {:#x} PCMEM:{:#x}{:#x}{:#x}{:#x})",
+    Log::log<Log::Level::Doctor>(R"(A:{:02x} F:{:02x} B:{:02x} C:{:02x} D:{:02x} E:{:02x} H:{:02x} L:{:02x} SP:{:04x} PC:{:04x} PCMEM:{:02x},{:02x},{:02x},{:02x})",
         gb.processor.A, flags_as_byte(gb), gb.processor.B, gb.processor.C, gb.processor.D,
         gb.processor.E, gb.processor.H, gb.processor.L, gb.processor.stack_pointer, gb.processor.program_counter,
         static_cast<Byte>(memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 1)),
@@ -951,12 +966,13 @@ void log_debug_state(GameBoy& gb) {
 
 void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {
+        log_debug_state(gb);
         Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
         Byte next_instruction = fetch(gb);
 
         std::invoke(instruction_handler[next_instruction], gb);
         Log::log<Log::Level::Verbose>("End instruction loop\n");
 
-        log_debug_state(gb);
+        Log::log<Log::Level::Verbose>("{}", gb.processor.print_state());
     }
 }

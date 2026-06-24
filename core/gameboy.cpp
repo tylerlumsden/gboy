@@ -17,6 +17,10 @@ Byte read(GameBoy& gb, Address addr) {
     else if(0xa000 <= addr && addr <= 0xbfff) {
         return CART::read(gb.cart, addr);
     }
+    else if(addr == 0xff44) {
+        // Placeholder for the LY until it gets implemented
+        return 0x90;
+    }
     else {
         return gb.memory_map[addr];
         /*

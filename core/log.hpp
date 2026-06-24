@@ -2,6 +2,7 @@
 
 #include <format>
 #include <fstream>
+#include <utility>
 
 namespace Log {
 
@@ -36,6 +37,14 @@ struct Logger {
     }
 };
 
+template<Level MsgLevel>
+void write_to_loggers(const std::string& message) {
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        ((Logger::get_logger<static_cast<Level>(Is)>()
+          << std::format("{}: {}\n", log_level_string(MsgLevel), message)), ...);
+    }(std::make_index_sequence<MsgLevel + 1>{});
+}
+
 template<Level LogLevel, typename... Args>
 void log(std::format_string<Args...> info, Args&&... args) {
     if constexpr(LogLevel == Level::Doctor) {
@@ -44,9 +53,8 @@ void log(std::format_string<Args...> info, Args&&... args) {
         log << std::format("{}\n", message);
     }
     else if constexpr(LogLevel >= LOG_LEVEL) {
-        auto& log = Logger::get_logger<LogLevel>();
         std::string message = std::format(info, std::forward<Args>(args)...);
-        log << std::format("{}: {}\n", log_level_string(LogLevel), message);
+        write_to_loggers<LogLevel>(message);
     }
 }
 

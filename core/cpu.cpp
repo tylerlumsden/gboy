@@ -293,6 +293,26 @@ void ld_register(GameBoy& gb) {
 }
 
 template<Byte Opcode>
+    requires (Opcode == 0x08)
+void ld_a16_sp(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing ld_a16_sp {:#x}", Opcode);
+    Byte low_byte = fetch(gb);
+    Byte high_byte = fetch(gb);
+    Address addr = splice(high_byte, low_byte);
+
+    memory_bus(gb, addr) = lo(gb.processor.stack_pointer);
+    memory_bus(gb, addr + 1) = hi(gb.processor.stack_pointer);
+}
+
+
+template<Byte Opcode>
+    requires (Opcode == 0xf9)
+void ld_sp_hl(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing ld_sp_hl {:#x}", Opcode);
+    gb.processor.stack_pointer = splice(gb.processor.H, gb.processor.L);
+}
+
+template<Byte Opcode>
     requires is_one_of<Opcode, 0x06, 0x0e, 0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e>
 void ld_n8(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing ld_n8 {:#x}", Opcode);
@@ -620,6 +640,39 @@ void arithmetic_register(GameBoy& gb) {
 }
 
 template<Byte Opcode>
+    requires (Opcode == 0xe8)
+void add_sp_s8(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing add_sp_s8 {:#x}", Opcode);
+    Signed_Byte operand = fetch(gb);
+
+    gb.processor.zero_flag = false;
+    gb.processor.subtraction_flag = false;
+    // The carry flags are treated as if we are adding an unsigned byte to the lo byte of the stack pointer
+    gb.processor.half_carry_flag = half_carry_add(lo(gb.processor.stack_pointer), static_cast<Byte>(operand));
+    gb.processor.carry_flag = carry_add(lo(gb.processor.stack_pointer), static_cast<Byte>(operand));
+
+    gb.processor.stack_pointer += operand;
+}
+
+template<Byte Opcode>
+    requires (Opcode == 0xf8)
+void ld_hl_sp_s8(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing ld_hl_sp_s8 {:#x}", Opcode);
+    Signed_Byte operand = fetch(gb);
+
+    gb.processor.zero_flag = false;
+    gb.processor.subtraction_flag = false;
+    // The carry flags are treated as if we are adding an unsigned byte to the lo byte of the stack pointer
+    gb.processor.half_carry_flag = half_carry_add(lo(gb.processor.stack_pointer), static_cast<Byte>(operand));
+    gb.processor.carry_flag = carry_add(lo(gb.processor.stack_pointer), static_cast<Byte>(operand));
+
+    Double_Byte sum = gb.processor.stack_pointer + operand;
+
+    gb.processor.H = hi(sum);
+    gb.processor.L = lo(sum);
+}
+
+template<Byte Opcode>
     requires is_one_of<Opcode, 0x07, 0x17>
 void rotate_left(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing rotate_left {:#x}", Opcode);
@@ -889,7 +942,7 @@ void cb_prefix(GameBoy& gb) {
 const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0x00 */ &nop,                           &ld_n16<0x01>,                  &ld_address_a<0x02>,            &inc_dec_double_register<0x03>,
 /* 0x04 */ &inc_dec_single_register<0x04>, &inc_dec_single_register<0x05>, &ld_n8<0x06>,                   &rotate_left<0x07>,
-/* 0x08 */ &no_impl<0x08>,                 &arithmetic_hl_add<0x09>,       &ld_address_a<0x0a>,            &inc_dec_double_register<0x0b>,
+/* 0x08 */ &ld_a16_sp<0x08>,                 &arithmetic_hl_add<0x09>,       &ld_address_a<0x0a>,            &inc_dec_double_register<0x0b>,
 /* 0x0c */ &inc_dec_single_register<0x0c>, &inc_dec_single_register<0x0d>, &ld_n8<0x0e>,                   &rotate_right<0x0f>,
 /* 0x10 */ &no_impl<0x10>,                 &ld_n16<0x11>,                  &ld_address_a<0x12>,            &inc_dec_double_register<0x13>,
 /* 0x14 */ &inc_dec_single_register<0x14>, &inc_dec_single_register<0x15>, &ld_n8<0x16>,                   &rotate_left<0x17>,
@@ -945,11 +998,11 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0xdc */ &call<0xdc>,                    &no_impl<0xdd>,                 &arithmetic_register<0xde>,     &no_impl<0xdf>,
 /* 0xe0 */ &ld_address_a_misc<0xe0>,       &pop_register<0xe1>,            &ld_address_a_misc<0xe2>,       &no_impl<0xe3>,
 /* 0xe4 */ &no_impl<0xe4>,                 &push_register<0xe5>,           &arithmetic_register<0xe6>,     &no_impl<0xe7>,
-/* 0xe8 */ &no_impl<0xe8>,                 &jp<0xe9>,                      &ld_address_a_misc<0xea>,       &no_impl<0xeb>,
+/* 0xe8 */ &add_sp_s8<0xe8>,                 &jp<0xe9>,                      &ld_address_a_misc<0xea>,       &no_impl<0xeb>,
 /* 0xec */ &no_impl<0xec>,                 &no_impl<0xed>,                 &arithmetic_register<0xee>,     &no_impl<0xef>,
 /* 0xf0 */ &ld_address_a_misc<0xf0>,       &pop_register<0xf1>,            &ld_address_a_misc<0xf2>,       &di,
 /* 0xf4 */ &no_impl<0xf4>,                 &push_register<0xf5>,           &arithmetic_register<0xf6>,     &no_impl<0xf7>,
-/* 0xf8 */ &no_impl<0xf8>,                 &no_impl<0xf9>,                 &ld_address_a_misc<0xfa>,       &no_impl<0xfb>,
+/* 0xf8 */ &ld_hl_sp_s8<0xf8>,                 &ld_sp_hl<0xf9>,                 &ld_address_a_misc<0xfa>,       &no_impl<0xfb>,
 /* 0xfc */ &no_impl<0xfc>,                 &no_impl<0xfd>,                 &arithmetic_register<0xfe>,     &rst<0xff>,
 };
 

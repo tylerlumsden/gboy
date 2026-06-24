@@ -39,6 +39,9 @@ void write(GameBoy& gb, Address addr, Byte data) {
     else if(0xa000 <= addr && addr <= 0xbfff) {
         CART::write(gb.cart, addr, data);
     }
+    else if(addr == 0xff01) {
+        std::cout << data;
+    }
     else {
         gb.memory_map[addr] = data;
         /*

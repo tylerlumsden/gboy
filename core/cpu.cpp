@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <format>
 #include <functional>
+#include <bitset>
 
 #include "gameboy.hpp"
 #include "memory.hpp"
@@ -717,6 +718,13 @@ void ret(GameBoy& gb) {
 }
 
 template<Byte Opcode>
+    requires(Opcode == 0xfb)
+void ei(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing ei {:#x}", Opcode);
+    gb.processor.IME = true;
+}
+
+template<Byte Opcode>
     requires(Opcode == 0x27)
 void daa(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing daa {:#x}", Opcode);
@@ -1002,7 +1010,7 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0xec */ &no_impl<0xec>,                 &no_impl<0xed>,                 &arithmetic_register<0xee>,     &no_impl<0xef>,
 /* 0xf0 */ &ld_address_a_misc<0xf0>,       &pop_register<0xf1>,            &ld_address_a_misc<0xf2>,       &di,
 /* 0xf4 */ &no_impl<0xf4>,                 &push_register<0xf5>,           &arithmetic_register<0xf6>,     &no_impl<0xf7>,
-/* 0xf8 */ &ld_hl_sp_s8<0xf8>,                 &ld_sp_hl<0xf9>,                 &ld_address_a_misc<0xfa>,       &no_impl<0xfb>,
+/* 0xf8 */ &ld_hl_sp_s8<0xf8>,                 &ld_sp_hl<0xf9>,                 &ld_address_a_misc<0xfa>,       &ei<0xfb>,
 /* 0xfc */ &no_impl<0xfc>,                 &no_impl<0xfd>,                 &arithmetic_register<0xfe>,     &rst<0xff>,
 };
 
@@ -1017,10 +1025,40 @@ void log_debug_state(GameBoy& gb) {
     );
 }
 
+void poll_and_handle_interrupts(GameBoy& gb) {
+
+    // DMG interrupts: 
+    // 0: VBlank, handler: 0x0040
+    // 1: LCD, handler: 0x0048
+    // 2: Timer, handler: 0x0050
+    // 3: Serial, handler: 0x0058
+    // 4: Joypad, handler: 0x0060
+    Byte interrupt_enable = memory_bus(gb, 0xffff);
+    Byte interrupt_flag = memory_bus(gb, 0xff0f);
+    std::bitset<8> enable_list(interrupt_enable);
+    std::bitset<8> request_list(interrupt_flag);
+    std::array<Address, 5> interrupt_handlers = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060}; 
+
+    for(int i = 0; i < 5; ++i) {
+        if(gb.processor.IME) {
+            if(enable_list[i] && request_list[i]) {
+                gb.processor.IME = false;
+
+                // Call instruction to the interrupt handler
+                push(gb, gb.processor.program_counter);
+                gb.processor.program_counter = interrupt_handlers[i];
+            }
+        }
+    }
+}
+
 void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {
         log_debug_state(gb);
         Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
+
+        poll_and_handle_interrupts(gb);
+
         Byte next_instruction = fetch(gb);
 
         std::invoke(instruction_handler[next_instruction], gb);

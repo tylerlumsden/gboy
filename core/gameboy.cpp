@@ -17,6 +17,9 @@ Byte read(GameBoy& gb, Address addr) {
     else if(0xa000 <= addr && addr <= 0xbfff) {
         return CART::read(gb.cart, addr);
     }
+    else if(0xff04 <= addr && addr <= 0xff07) {
+        return TIMER::read(gb.timer, addr);
+    }
     else if(addr == 0xff44) {
         // Placeholder for the LY until it gets implemented
         return 0x90;
@@ -41,6 +44,9 @@ void write(GameBoy& gb, Address addr, Byte data) {
     }
     else if(addr == 0xff01) {
         std::cout << data;
+    }
+    else if(0xff04 <= addr && addr <= 0xff07) {
+        TIMER::write(gb.timer, addr, data);
     }
     else {
         gb.memory_map[addr] = data;

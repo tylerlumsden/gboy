@@ -2,12 +2,16 @@
 
 #include "cartridge.hpp"
 #include "cpu.hpp"
+#include "timer.hpp"
+#include "interrupt.hpp"
 #include "data_types.hpp"
 
 namespace GB {
 
 struct GameBoy {
     Cartridge cart;
+    Timer timer;
+    Interrupt interrupt;
     std::array<Byte, 0xffff> memory_map;
 
     SM83::CPU processor;

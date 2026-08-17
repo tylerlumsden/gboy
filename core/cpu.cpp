@@ -1042,7 +1042,10 @@ void poll_and_handle_interrupts(GameBoy& gb) {
     for(int i = 0; i < 5; ++i) {
         if(gb.processor.IME) {
             if(enable_list[i] && request_list[i]) {
+                Log::log<Log::Level::Verbose>("Interrupt Handler");
                 gb.processor.IME = false;
+                request_list[i] = 0x0;
+                memory_bus(gb, 0xff0f) = request_list.to_ulong();
 
                 // Call instruction to the interrupt handler
                 push(gb, gb.processor.program_counter);

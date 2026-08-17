@@ -2,6 +2,7 @@ add_library(core STATIC
     gameboy.cpp
     cartridge.cpp
     cpu.cpp
+    timer.cpp
 )
 
 if(NOT DEFINED LOG_LEVEL)

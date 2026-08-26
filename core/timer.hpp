@@ -13,6 +13,7 @@ struct Timer {
     Byte counter = 0;
     Byte modulo = 0;
     Byte control = 0xf8;
+    bool overflow_flag = false;
 
     std::string print_state() {
         return std::format(R"(
@@ -22,8 +23,9 @@ struct Timer {
             counter: {:#x}
             modulo: {:#x}
             control: {:#x}
+            overflow: {}
             )",
-            cycles_per_second, system_counter, counter, modulo, control
+            cycles_per_second, system_counter, counter, modulo, control, overflow_flag
         );
     }
 };

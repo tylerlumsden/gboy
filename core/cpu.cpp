@@ -1,3 +1,4 @@
+#include <cmath>
 #include <utility>
 #include <array>
 #include <stdexcept>
@@ -95,8 +96,6 @@ Byte fetch(GameBoy& gb) {
     Byte retval = cpu_memory_bus(gb, gb.processor.program_counter);
     ++gb.processor.program_counter;
 
-    m_cycle_tick(gb);
-
     Log::log<Log::Level::Verbose>("Fetched byte {:#x}", retval);    
     return retval;
 }
@@ -175,6 +174,9 @@ void jp(GameBoy& gb) {
         if(!gb.processor.carry_flag) return;
     }
 
+    if constexpr(Opcode != 0xe9) {
+        m_cycle_tick(gb);
+    }
     gb.processor.program_counter = jump_addr;
 }
 
@@ -196,9 +198,13 @@ void jr(GameBoy& gb) {
         if(!gb.processor.zero_flag) return;
     }
     else if constexpr(Opcode == 0x30) {
-        if(!gb.processor.carry_flag) return;
+        if(gb.processor.carry_flag) return;
+    } 
+    else if constexpr(Opcode == 0x38) {
+        if(gb.processor.carry_flag) return;
     }
 
+    m_cycle_tick(gb);
     gb.processor.program_counter += relative_address;
 }
 
@@ -319,6 +325,7 @@ template<Byte Opcode>
 void ld_sp_hl(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing ld_sp_hl {:#x}", Opcode);
     gb.processor.stack_pointer = splice(gb.processor.H, gb.processor.L);
+    m_cycle_tick(gb);
 }
 
 template<Byte Opcode>
@@ -481,6 +488,8 @@ void inc_dec_double_register(GameBoy& gb) {
     else if constexpr(opcode_column == 0xb) data = data - 1;
     high_byte = hi(data); 
     low_byte = lo(data);
+
+    m_cycle_tick(gb);
 }
 
 template<Byte Opcode>
@@ -488,6 +497,8 @@ template<Byte Opcode>
 void dec_sp(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing dec_sp {:#x}", Opcode);
     --gb.processor.stack_pointer;
+
+    m_cycle_tick(gb);
 }
 
 template<Byte Opcode>
@@ -495,6 +506,8 @@ template<Byte Opcode>
 void inc_sp(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing inc_sp {:#x}", Opcode);
     ++gb.processor.stack_pointer;
+
+    m_cycle_tick(gb);
 }
 
 template<Byte Opcode>
@@ -508,7 +521,7 @@ void inc_dec_single_register(GameBoy& gb) {
         if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(gb.processor.B);
         else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(gb.processor.D);
         else if constexpr(Opcode == 0x24 || Opcode == 0x25) return static_cast<Byte&>(gb.processor.H);
-        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L));
+        else if constexpr(Opcode == 0x34 || Opcode == 0x35) { return cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L)); }
         else if constexpr(Opcode == 0x0c || Opcode == 0x0d) return static_cast<Byte&>(gb.processor.C);
         else if constexpr(Opcode == 0x1c || Opcode == 0x1d) return static_cast<Byte&>(gb.processor.E);
         else if constexpr(Opcode == 0x2c || Opcode == 0x2d) return static_cast<Byte&>(gb.processor.L);
@@ -549,6 +562,8 @@ void arithmetic_hl_add(GameBoy& gb) {
 
     gb.processor.H = hi(sum);
     gb.processor.L = lo(sum);
+
+    m_cycle_tick(gb);
 }
 
 template<Byte Opcode>
@@ -660,6 +675,8 @@ void add_sp_s8(GameBoy& gb) {
     gb.processor.carry_flag = carry_add(lo(gb.processor.stack_pointer), static_cast<Byte>(operand));
 
     gb.processor.stack_pointer += operand;
+
+    m_cycle_tick(gb, 2);
 }
 
 template<Byte Opcode>
@@ -675,6 +692,7 @@ void ld_hl_sp_s8(GameBoy& gb) {
     gb.processor.carry_flag = carry_add(lo(gb.processor.stack_pointer), static_cast<Byte>(operand));
 
     Double_Byte sum = gb.processor.stack_pointer + operand;
+    m_cycle_tick(gb);
 
     gb.processor.H = hi(sum);
     gb.processor.L = lo(sum);
@@ -714,6 +732,10 @@ template<Byte Opcode>
 void ret(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing ret {:#x}", Opcode);
     bool flag = [&]() {
+        if constexpr(Opcode != 0xc9) {
+            m_cycle_tick(gb);
+        }
+
         if constexpr(Opcode == 0xc0) return !gb.processor.zero_flag;
         else if constexpr(Opcode == 0xd0) return !gb.processor.carry_flag;
         else if constexpr(Opcode == 0xc8) return gb.processor.zero_flag;
@@ -721,7 +743,10 @@ void ret(GameBoy& gb) {
         else if constexpr(Opcode == 0xc9) return true;
     }();
 
-    if(flag) gb.processor.program_counter = pop(gb);
+    if(flag) {
+        gb.processor.program_counter = pop(gb);
+        m_cycle_tick(gb);
+    }
 }
 
 template<Byte Opcode>
@@ -1027,8 +1052,8 @@ void log_debug_state(GameBoy& gb) {
     Log::log<Log::Level::Doctor>(R"(A:{:02x} F:{:02x} B:{:02x} C:{:02x} D:{:02x} E:{:02x} H:{:02x} L:{:02x} SP:{:04x} PC:{:04x} PCMEM:{:02x},{:02x},{:02x},{:02x})",
         gb.processor.A, flags_as_byte(gb), gb.processor.B, gb.processor.C, gb.processor.D,
         gb.processor.E, gb.processor.H, gb.processor.L, gb.processor.stack_pointer, gb.processor.program_counter,
-        static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 1)),
-        static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 3))
+        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 1)),
+        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 3))
     );
 }
 
@@ -1040,8 +1065,8 @@ void poll_and_handle_interrupts(GameBoy& gb) {
     // 2: Timer, handler: 0x0050
     // 3: Serial, handler: 0x0058
     // 4: Joypad, handler: 0x0060
-    Byte interrupt_enable = cpu_memory_bus(gb, 0xffff);
-    Byte interrupt_flag = cpu_memory_bus(gb, 0xff0f);
+    Byte interrupt_enable = memory_bus(gb, 0xffff);
+    Byte interrupt_flag = memory_bus(gb, 0xff0f);
     std::bitset<8> enable_list(interrupt_enable);
     std::bitset<8> request_list(interrupt_flag);
     std::array<Address, 5> interrupt_handlers = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060}; 
@@ -1050,9 +1075,14 @@ void poll_and_handle_interrupts(GameBoy& gb) {
         if(gb.processor.IME) {
             if(enable_list[i] && request_list[i]) {
                 Log::log<Log::Level::Verbose>("Interrupt Handler");
+
                 gb.processor.IME = false;
                 request_list[i] = 0x0;
-                cpu_memory_bus(gb, 0xff0f) = request_list.to_ulong();
+
+                nop(gb);
+                nop(gb);
+
+                memory_bus(gb, 0xff0f) = request_list.to_ulong();
 
                 // Call instruction to the interrupt handler
                 push(gb, gb.processor.program_counter);

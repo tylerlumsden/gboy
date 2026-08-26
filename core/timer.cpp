@@ -22,6 +22,10 @@ Double_Byte control_increment(Byte control) {
     }
 }
 
+bool control_enable(Byte control) {
+    return control & 0b00000100;
+}
+
 void m_cycle_tick(GameBoy& gb, Byte count) {
     for(auto i = 0; i < count; ++i) {
         m_cycle_tick(gb);
@@ -29,15 +33,29 @@ void m_cycle_tick(GameBoy& gb, Byte count) {
 }
 
 void m_cycle_tick(GameBoy& gb) {
-    gb.timer.system_counter += 1;
+    // 1 m_cycle = 4 t_cycles
+    gb.timer.system_counter += 4;
 
-    Double_Byte timer_increment = control_increment(gb.timer.control);
-    if(gb.timer.system_counter % timer_increment == 0) {
-        if(gb.timer.counter == 0xff) {
-            request_timer_interrupt(gb.interrupt);
+    bool timer_enable = control_enable(gb.timer.control);
+
+    if(timer_enable) {
+        if(gb.timer.overflow_flag) {
+
             gb.timer.counter = gb.timer.modulo;
+            request_timer_interrupt(gb.interrupt);
+            gb.timer.overflow_flag = false;
+
         } else {
-            gb.timer.counter += 1;
+
+            Double_Byte timer_increment = control_increment(gb.timer.control);
+            if(gb.timer.system_counter % timer_increment == 0) {
+                if(gb.timer.counter == 0xff) {
+                    gb.timer.overflow_flag = true;
+                } else {
+                    gb.timer.counter += 1;
+                }
+            }
+            
         }
     }
 }

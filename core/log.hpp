@@ -47,7 +47,7 @@ void write_to_loggers(const std::string& message) {
 
 template<Level LogLevel, typename... Args>
 void log(std::format_string<Args...> info, Args&&... args) {
-    if constexpr(LogLevel == Level::Doctor) {
+    if constexpr(LogLevel == Level::Doctor && LogLevel >= LOG_LEVEL) {
         auto& log = Logger::get_logger<LogLevel>();
         std::string message = std::format(info, std::forward<Args>(args)...);
         log << std::format("{}\n", message);

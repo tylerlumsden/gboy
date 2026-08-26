@@ -1,5 +1,8 @@
 #pragma once
 
+#include <format>
+#include <string>
+
 #include "data_types.hpp"
 
 namespace GB { struct GameBoy; }
@@ -11,10 +14,22 @@ struct Timer {
     Byte modulo = 0;
     Byte control = 0xf8;
 
-
+    std::string print_state() {
+        return std::format(R"(
+            Timer State:
+            cycles_per_second: {}
+            system_counter: {:#x}
+            counter: {:#x}
+            modulo: {:#x}
+            control: {:#x}
+            )",
+            cycles_per_second, system_counter, counter, modulo, control
+        );
+    }
 };
 
 void m_cycle_tick(GB::GameBoy& gb);
+void m_cycle_tick(GB::GameBoy& gb, Byte count);
 
 namespace TIMER {
     Byte read(Timer& timer, Address addr);

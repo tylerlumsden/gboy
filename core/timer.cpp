@@ -22,10 +22,16 @@ Double_Byte control_increment(Byte control) {
     }
 }
 
+void m_cycle_tick(GameBoy& gb, Byte count) {
+    for(auto i = 0; i < count; ++i) {
+        m_cycle_tick(gb);
+    }
+}
+
 void m_cycle_tick(GameBoy& gb) {
     gb.timer.system_counter += 1;
 
-    Byte timer_increment = control_increment(gb.timer.control);
+    Double_Byte timer_increment = control_increment(gb.timer.control);
     if(gb.timer.system_counter % timer_increment == 0) {
         if(gb.timer.counter == 0xff) {
             request_timer_interrupt(gb.interrupt);
@@ -48,7 +54,7 @@ namespace TIMER {
             return timer.control;
         }
         throw std::invalid_argument(std::format(
-            "Attempted to read address {:#x}. This address is either unimplemented or out of range.\n", addr
+            "TIMER: Attempted to read address {:#x}. This address is either unimplemented or out of range.\n", addr
         ));
     }
     void write(Timer& timer, Address addr, Byte data) {
@@ -60,9 +66,10 @@ namespace TIMER {
             timer.modulo = data;
         } else if(addr == 0xff07) {
             timer.control = data;
+        } else {
+            throw std::invalid_argument(std::format(
+                "TIMER: Attempted to write to address {:#x}. This address is either unimplemented or out of range.\n", addr
+            ));
         }
-        throw std::invalid_argument(std::format(
-            "Attempted to write to address {:#x}. This address is either unimplemented or out of range.\n", addr
-        ));
     }
 }

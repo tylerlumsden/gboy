@@ -20,6 +20,16 @@
             "CMAKE_BUILD_TYPE": "Release",
             "LOG_LEVEL": "2"
         }
+    },
+    {
+        "name": "profile",
+        "displayName": "Profile",
+        "generator": "Unix Makefiles",
+        "binaryDir": "build/profile",
+        "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+            "LOG_LEVEL": "6"
+        }
     }
   ]
 }

@@ -85,10 +85,17 @@ void byte_as_flags(GameBoy& gb, Byte data) {
     gb.processor.zero_flag = (data & 0b10000000);
 }
 
+Proxy<GameBoy> cpu_memory_bus(GameBoy& gb, Address addr) {
+    m_cycle_tick(gb);
+    return memory_bus(gb, addr);
+}
+
 Byte fetch(GameBoy& gb) {
 
-    Byte retval = read(gb, gb.processor.program_counter);
+    Byte retval = cpu_memory_bus(gb, gb.processor.program_counter);
     ++gb.processor.program_counter;
+
+    m_cycle_tick(gb);
 
     Log::log<Log::Level::Verbose>("Fetched byte {:#x}", retval);    
     return retval;
@@ -105,19 +112,20 @@ void push(GameBoy& gb, Double_Byte data) {
     Byte high = hi(data);
     Byte low = lo(data);
 
+    m_cycle_tick(gb);
 
     --gb.processor.stack_pointer;
-    memory_bus(gb, gb.processor.stack_pointer) = high;
+    cpu_memory_bus(gb, gb.processor.stack_pointer) = high;
 
     --gb.processor.stack_pointer;
-    memory_bus(gb, gb.processor.stack_pointer) = low;
+    cpu_memory_bus(gb, gb.processor.stack_pointer) = low;
 }
 
 Double_Byte pop(GameBoy& gb) {
-    Byte low = memory_bus(gb, gb.processor.stack_pointer);
+    Byte low = cpu_memory_bus(gb, gb.processor.stack_pointer);
     ++gb.processor.stack_pointer;
 
-    Byte high = memory_bus(gb, gb.processor.stack_pointer);
+    Byte high = cpu_memory_bus(gb, gb.processor.stack_pointer);
     ++gb.processor.stack_pointer;
 
     return splice(high, low);
@@ -234,10 +242,10 @@ void ld_address_a(GameBoy& gb) {
 
     constexpr Byte load_order = (Opcode & 0x0f);
     if constexpr(load_order == 0x02) {
-        memory_bus(gb, address) = gb.processor.A;
+        cpu_memory_bus(gb, address) = gb.processor.A;
     }
     else if constexpr(load_order == 0x0a) {
-        gb.processor.A = memory_bus(gb, address);
+        gb.processor.A = cpu_memory_bus(gb, address);
     }
 }
 
@@ -264,10 +272,10 @@ void ld_address_a_misc(GameBoy& gb) {
 
     constexpr Byte load_order = (Opcode & 0xf0);
     if constexpr(load_order == 0xe0) {
-        memory_bus(gb, address) = gb.processor.A;
+        cpu_memory_bus(gb, address) = gb.processor.A;
     }
     else if constexpr(load_order == 0xf0) {
-        gb.processor.A = memory_bus(gb, address);
+        gb.processor.A = cpu_memory_bus(gb, address);
     }
 }
 
@@ -283,7 +291,7 @@ void ld_register(GameBoy& gb) {
         else if constexpr(Regcode == 0b011) return static_cast<Byte&>(gb.processor.E);
         else if constexpr(Regcode == 0b100) return static_cast<Byte&>(gb.processor.H);
         else if constexpr(Regcode == 0b101) return static_cast<Byte&>(gb.processor.L);
-        else if constexpr(Regcode == 0b110) return memory_bus(gb, splice(gb.processor.H, gb.processor.L));
+        else if constexpr(Regcode == 0b110) return cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L));
         else if constexpr(Regcode == 0b111) return static_cast<Byte&>(gb.processor.A);
     };
 
@@ -301,8 +309,8 @@ void ld_a16_sp(GameBoy& gb) {
     Byte high_byte = fetch(gb);
     Address addr = splice(high_byte, low_byte);
 
-    memory_bus(gb, addr) = lo(gb.processor.stack_pointer);
-    memory_bus(gb, addr + 1) = hi(gb.processor.stack_pointer);
+    cpu_memory_bus(gb, addr) = lo(gb.processor.stack_pointer);
+    cpu_memory_bus(gb, addr + 1) = hi(gb.processor.stack_pointer);
 }
 
 
@@ -324,7 +332,7 @@ void ld_n8(GameBoy& gb) {
         if constexpr(Opcode == 0x1e) return static_cast<Byte&>(gb.processor.E);
         if constexpr(Opcode == 0x26) return static_cast<Byte&>(gb.processor.H);
         if constexpr(Opcode == 0x2e) return static_cast<Byte&>(gb.processor.L);
-        if constexpr(Opcode == 0x36) return memory_bus(gb, splice(gb.processor.H, gb.processor.L));
+        if constexpr(Opcode == 0x36) return cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L));
         if constexpr(Opcode == 0x3e) return static_cast<Byte&>(gb.processor.A);
     };
 
@@ -393,7 +401,6 @@ void ldh(GameBoy& gb) {
     }
 }
 
-// TODO: implement variants
 template<Byte Opcode>
     requires is_one_of<Opcode, 0xc4, 0xd4, 0xcc, 0xdc, 0xcd>
 void call(GameBoy& gb) {
@@ -501,7 +508,7 @@ void inc_dec_single_register(GameBoy& gb) {
         if constexpr(Opcode == 0x04 || Opcode == 0x05) return static_cast<Byte&>(gb.processor.B);
         else if constexpr(Opcode == 0x14 || Opcode == 0x15) return static_cast<Byte&>(gb.processor.D);
         else if constexpr(Opcode == 0x24 || Opcode == 0x25) return static_cast<Byte&>(gb.processor.H);
-        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return memory_bus(gb, splice(gb.processor.H, gb.processor.L));
+        else if constexpr(Opcode == 0x34 || Opcode == 0x35) return cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L));
         else if constexpr(Opcode == 0x0c || Opcode == 0x0d) return static_cast<Byte&>(gb.processor.C);
         else if constexpr(Opcode == 0x1c || Opcode == 0x1d) return static_cast<Byte&>(gb.processor.E);
         else if constexpr(Opcode == 0x2c || Opcode == 0x2d) return static_cast<Byte&>(gb.processor.L);
@@ -563,7 +570,7 @@ void arithmetic_register(GameBoy& gb) {
         else if constexpr(RegCode == 0x03) return gb.processor.E;
         else if constexpr(RegCode == 0x04) return gb.processor.H;
         else if constexpr(RegCode == 0x05) return gb.processor.L;
-        else if constexpr(RegCode == 0x06) return static_cast<Byte>(memory_bus(gb, splice(gb.processor.H, gb.processor.L)));
+        else if constexpr(RegCode == 0x06) return static_cast<Byte>(cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L)));
         else if constexpr(RegCode == 0x07) return gb.processor.A;
     }();
 
@@ -770,7 +777,7 @@ inline constexpr void register_map_apply(GameBoy& gb, Func func) {
     else if constexpr(Regcode == 0x3) func(gb.processor.E);
     else if constexpr(Regcode == 0x4) func(gb.processor.H);
     else if constexpr(Regcode == 0x5) func(gb.processor.L);
-    else if constexpr(Regcode == 0x6) func(memory_bus(gb, splice(gb.processor.H, gb.processor.L)));
+    else if constexpr(Regcode == 0x6) func(cpu_memory_bus(gb, splice(gb.processor.H, gb.processor.L)));
     else if constexpr(Regcode == 0x7) func(gb.processor.A);
 }
 
@@ -1020,8 +1027,8 @@ void log_debug_state(GameBoy& gb) {
     Log::log<Log::Level::Doctor>(R"(A:{:02x} F:{:02x} B:{:02x} C:{:02x} D:{:02x} E:{:02x} H:{:02x} L:{:02x} SP:{:04x} PC:{:04x} PCMEM:{:02x},{:02x},{:02x},{:02x})",
         gb.processor.A, flags_as_byte(gb), gb.processor.B, gb.processor.C, gb.processor.D,
         gb.processor.E, gb.processor.H, gb.processor.L, gb.processor.stack_pointer, gb.processor.program_counter,
-        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 1)),
-        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 3))
+        static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 1)),
+        static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 3))
     );
 }
 
@@ -1033,8 +1040,8 @@ void poll_and_handle_interrupts(GameBoy& gb) {
     // 2: Timer, handler: 0x0050
     // 3: Serial, handler: 0x0058
     // 4: Joypad, handler: 0x0060
-    Byte interrupt_enable = memory_bus(gb, 0xffff);
-    Byte interrupt_flag = memory_bus(gb, 0xff0f);
+    Byte interrupt_enable = cpu_memory_bus(gb, 0xffff);
+    Byte interrupt_flag = cpu_memory_bus(gb, 0xff0f);
     std::bitset<8> enable_list(interrupt_enable);
     std::bitset<8> request_list(interrupt_flag);
     std::array<Address, 5> interrupt_handlers = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060}; 
@@ -1045,7 +1052,7 @@ void poll_and_handle_interrupts(GameBoy& gb) {
                 Log::log<Log::Level::Verbose>("Interrupt Handler");
                 gb.processor.IME = false;
                 request_list[i] = 0x0;
-                memory_bus(gb, 0xff0f) = request_list.to_ulong();
+                cpu_memory_bus(gb, 0xff0f) = request_list.to_ulong();
 
                 // Call instruction to the interrupt handler
                 push(gb, gb.processor.program_counter);
@@ -1068,5 +1075,6 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
         Log::log<Log::Level::Verbose>("End instruction loop\n");
 
         Log::log<Log::Level::Verbose>("{}", gb.processor.print_state());
+        Log::log<Log::Level::Verbose>("{}", gb.timer.print_state());
     }
 }

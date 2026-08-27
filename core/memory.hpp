@@ -2,22 +2,31 @@
 
 #include "data_types.hpp"
 
-template <typename T>
+inline constexpr auto empty_func = [](auto&) {};
+
+template <typename T, auto AccessFunc = empty_func>
 struct Proxy {
     T& obj;
     Address addr;
 
     Proxy& operator=(Byte data) {
         write(obj, addr, data);
+
+        AccessFunc(obj);
+
         return *this;
     }
 
     operator Byte() const {
-        return read(obj, addr);
+        Byte data = read(obj, addr);
+        
+        AccessFunc(obj);
+
+        return data;
     }
 };
 
-template <typename T>
-Proxy<T> memory_bus(T& obj, Address addr) {
+template <typename T, auto AccessFunc = empty_func>
+Proxy<T, AccessFunc> memory_bus(T& obj, Address addr) {
     return {obj, addr};
 }

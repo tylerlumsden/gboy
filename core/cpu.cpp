@@ -86,9 +86,8 @@ void byte_as_flags(GameBoy& gb, Byte data) {
     gb.processor.zero_flag = (data & 0b10000000);
 }
 
-Proxy<GameBoy> cpu_memory_bus(GameBoy& gb, Address addr) {
-    m_cycle_tick(gb);
-    return memory_bus(gb, addr);
+auto cpu_memory_bus(GameBoy& gb, Address addr) {
+    return memory_bus<GameBoy, [](GameBoy& gb) { m_cycle_tick(gb); }>(gb, addr);
 }
 
 Byte fetch(GameBoy& gb) {
@@ -1052,8 +1051,8 @@ void log_debug_state(GameBoy& gb) {
     Log::log<Log::Level::Doctor>(R"(A:{:02x} F:{:02x} B:{:02x} C:{:02x} D:{:02x} E:{:02x} H:{:02x} L:{:02x} SP:{:04x} PC:{:04x} PCMEM:{:02x},{:02x},{:02x},{:02x})",
         gb.processor.A, flags_as_byte(gb), gb.processor.B, gb.processor.C, gb.processor.D,
         gb.processor.E, gb.processor.H, gb.processor.L, gb.processor.stack_pointer, gb.processor.program_counter,
-        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 1)),
-        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(cpu_memory_bus(gb, gb.processor.program_counter + 3))
+        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 1)),
+        static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 3))
     );
 }
 

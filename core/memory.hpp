@@ -1,32 +1,37 @@
 #pragma once
 
+#include <concepts>
+
 #include "data_types.hpp"
 
-inline constexpr auto empty_func = [](auto&) {};
+struct empty_func {
+    void operator()() const noexcept {}
+};
 
-template <typename T, auto AccessFunc = empty_func>
+template <typename T, typename AccessFunc = empty_func>
 struct Proxy {
     T& obj;
     Address addr;
+    AccessFunc access;
 
     Proxy& operator=(Byte data) {
-        write(obj, addr, data);
+        access();
 
-        AccessFunc(obj);
+        write(obj, addr, data);
 
         return *this;
     }
 
     operator Byte() const {
+        access();
+
         Byte data = read(obj, addr);
-        
-        AccessFunc(obj);
 
         return data;
     }
 };
 
-template <typename T, auto AccessFunc = empty_func>
-Proxy<T, AccessFunc> memory_bus(T& obj, Address addr) {
-    return {obj, addr};
+template <typename T, typename AccessFunc = empty_func>
+Proxy<T, AccessFunc> memory_bus(T& obj, Address addr, AccessFunc access = {}) {
+    return {obj, addr, access};
 }

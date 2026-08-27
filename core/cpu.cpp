@@ -87,7 +87,7 @@ void byte_as_flags(GameBoy& gb, Byte data) {
 }
 
 auto cpu_memory_bus(GameBoy& gb, Address addr) {
-    return memory_bus<GameBoy, [](GameBoy& gb) { m_cycle_tick(gb); }>(gb, addr);
+    return memory_bus(gb, addr, [&gb]() { m_cycle_tick(gb); });
 }
 
 Byte fetch(GameBoy& gb) {
@@ -188,9 +188,6 @@ void jr(GameBoy& gb) {
     if constexpr(Opcode == 0x20) {
         if(gb.processor.zero_flag) return;
     }
-    else if constexpr(Opcode == 0x30) {
-        if(gb.processor.carry_flag) return;
-    }
     // Opcode 0x18 has no condition check, including constexpr for consistency
     else if constexpr(Opcode == 0x18);
     else if constexpr(Opcode == 0x28) {
@@ -200,7 +197,7 @@ void jr(GameBoy& gb) {
         if(gb.processor.carry_flag) return;
     } 
     else if constexpr(Opcode == 0x38) {
-        if(gb.processor.carry_flag) return;
+        if(!gb.processor.carry_flag) return;
     }
 
     m_cycle_tick(gb);
@@ -372,11 +369,16 @@ void rst(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing rst {:#x}", Opcode);
     Byte high_byte = hi(gb.processor.program_counter);
     Byte low_byte = lo(gb.processor.program_counter);
-    write(gb, gb.processor.stack_pointer, high_byte);
-    --gb.processor.stack_pointer;
-    write(gb, gb.processor.stack_pointer, low_byte);
+    auto high_memory = cpu_memory_bus(gb, gb.processor.stack_pointer);
+    high_memory = high_byte;
     --gb.processor.stack_pointer;
 
+    auto low_memory = cpu_memory_bus(gb, gb.processor.stack_pointer);
+    low_memory = low_byte;
+    --gb.processor.stack_pointer;
+
+
+    m_cycle_tick(gb);
     if constexpr(Opcode == 0xff) {
         gb.processor.program_counter = 0x38;
     }
@@ -528,17 +530,19 @@ void inc_dec_single_register(GameBoy& gb) {
     }();
 
     constexpr Byte opcode_column = lo(Opcode);
+    Byte register_value = data;
     if constexpr(opcode_column == 0x5 || opcode_column == 0xd) {
-        gb.processor.half_carry_flag = half_carry_sub(data, static_cast<Byte>(1));
-        data = data - 1;
+        gb.processor.half_carry_flag = half_carry_sub(register_value, static_cast<Byte>(1));
+        register_value = register_value - 1;
         gb.processor.subtraction_flag = true;
     } 
     else if constexpr(opcode_column == 0x04 || opcode_column == 0xc) {
-        gb.processor.half_carry_flag = half_carry_add(data, static_cast<Byte>(1));
-        data = data + 1;
+        gb.processor.half_carry_flag = half_carry_add(register_value, static_cast<Byte>(1));
+        register_value = register_value + 1;
         gb.processor.subtraction_flag = false;
     }
-    gb.processor.zero_flag = (data == 0);
+    gb.processor.zero_flag = (register_value == 0);
+    data = register_value;
 }
 
 template<Byte Opcode>
@@ -810,10 +814,11 @@ template<Byte Opcode>
 void cb_rotate_left_carry(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_left_carry {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        Byte most_significant_bit = (memory & 0b10000000);
+        Byte register_value = memory;
+        Byte most_significant_bit = (register_value & 0b10000000);
         gb.processor.carry_flag = most_significant_bit;
 
-        memory = (memory << 1) | most_significant_bit;
+        memory = (register_value << 1) | most_significant_bit;
     });
 }
 
@@ -822,10 +827,11 @@ template<Byte Opcode>
 void cb_rotate_right_carry(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_right_carry {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        Byte least_significant_bit = (memory & 0b00000001);
+        Byte register_value = memory;
+        Byte least_significant_bit = (register_value & 0b00000001);
         gb.processor.carry_flag = least_significant_bit;
 
-        memory = (memory >> 1) | least_significant_bit;
+        memory = (register_value >> 1) | least_significant_bit;
     });
 }
 
@@ -843,12 +849,15 @@ template<Byte Opcode>
 void cb_rotate_right(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_right {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        bool new_carry_flag = (memory & 0b00000001);
+        Byte register_value = memory;
+        bool new_carry_flag = (register_value & 0b00000001);
 
-        memory = (memory >> 1) | (gb.processor.carry_flag << 7);
+        register_value = (register_value >> 1) | (gb.processor.carry_flag << 7);
+
+        memory = register_value;
 
         gb.processor.carry_flag = new_carry_flag;
-        gb.processor.zero_flag = (memory == 0);
+        gb.processor.zero_flag = (register_value == 0);
         gb.processor.half_carry_flag = false;
         gb.processor.subtraction_flag = false;
     });
@@ -859,9 +868,10 @@ template<Byte Opcode>
 void cb_shift_left_reset(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_shift_left_reset {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        Byte most_significant_bit = (memory & 0b10000000);
+        Byte register_value = memory;
+        Byte most_significant_bit = (register_value & 0b10000000);
         gb.processor.carry_flag = most_significant_bit;
-        memory = (memory << 1);
+        memory = (register_value << 1);
     });
 }
 
@@ -870,10 +880,11 @@ template<Byte Opcode>
 void cb_shift_right(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_shift_right {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        Byte most_significant_bit = (memory & 0b10000000);
-        Byte least_significant_bit = (memory & 0b00000001);
+        Byte register_value = memory;
+        Byte most_significant_bit = (register_value & 0b10000000);
+        Byte least_significant_bit = (register_value & 0b00000001);
         gb.processor.carry_flag = least_significant_bit;
-        memory = (memory >> 1) | (most_significant_bit);
+        memory = (register_value >> 1) | (most_significant_bit);
     });
 }
 
@@ -882,9 +893,11 @@ template<Byte Opcode>
 void cb_shift_right_reset(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb shift_right_reset {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        gb.processor.carry_flag = (memory & 0b00000001);
-        memory = (memory >> 1);
-        gb.processor.zero_flag = (memory == 0);
+        Byte register_value = memory;
+        gb.processor.carry_flag = (register_value & 0b00000001);
+        register_value = (register_value >> 1);
+        memory = register_value;
+        gb.processor.zero_flag = (register_value == 0);
         gb.processor.half_carry_flag = false;
         gb.processor.subtraction_flag = false;
     });
@@ -895,7 +908,8 @@ template<Byte Opcode>
 void swap(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb swap {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        memory = (memory << 4) | (memory >> 4);
+        Byte register_value = memory;
+        memory = (register_value << 4) | (register_value >> 4);
     });
 }
 
@@ -1078,8 +1092,7 @@ void poll_and_handle_interrupts(GameBoy& gb) {
                 gb.processor.IME = false;
                 request_list[i] = 0x0;
 
-                nop(gb);
-                nop(gb);
+                m_cycle_tick(gb, 2);
 
                 memory_bus(gb, 0xff0f) = request_list.to_ulong();
 

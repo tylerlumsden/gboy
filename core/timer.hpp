@@ -14,6 +14,7 @@ struct Timer {
     Byte modulo = 0;
     Byte control = 0xf8;
     bool overflow_flag = false;
+    bool overflow_latch = false;
 
     std::string print_state() {
         return std::format(R"(

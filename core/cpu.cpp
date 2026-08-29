@@ -788,6 +788,24 @@ void daa(GameBoy& gb) {
     gb.processor.half_carry_flag = false;
 }
 
+template <Byte Opcode>
+    requires(Opcode == 0x37)
+void scf(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing scf {:#x}", Opcode);\
+    gb.processor.carry_flag = true;
+    gb.processor.subtraction_flag = false;
+    gb.processor.half_carry_flag = false;
+}
+
+template <Byte Opcode>
+    requires(Opcode == 0x3f)
+void ccf(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing ccf {:#x}", Opcode);\
+    gb.processor.carry_flag = !gb.processor.carry_flag;
+    gb.processor.subtraction_flag = false;
+    gb.processor.half_carry_flag = false;
+}
+
 template<Byte Opcode>
     requires(Opcode == 0x2f)
 void cpl(GameBoy& gb) {
@@ -1023,9 +1041,9 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0x28 */ &jr<0x28>,                      &arithmetic_hl_add<0x29>,       &ld_address_a<0x2a>,            &inc_dec_double_register<0x2b>,
 /* 0x2c */ &inc_dec_single_register<0x2c>, &inc_dec_single_register<0x2d>, &ld_n8<0x2e>,                   &cpl<0x2f>,
 /* 0x30 */ &jr<0x30>,                      &ld_n16<0x31>,                  &ld_address_a<0x32>,            &inc_sp<0x33>,
-/* 0x34 */ &inc_dec_single_register<0x34>, &inc_dec_single_register<0x35>, &ld_n8<0x36>,                   &no_impl<0x37>,
+/* 0x34 */ &inc_dec_single_register<0x34>, &inc_dec_single_register<0x35>, &ld_n8<0x36>,                   &scf<0x37>,
 /* 0x38 */ &jr<0x38>,                      &arithmetic_hl_add<0x39>,       &ld_address_a<0x3a>,            &dec_sp<0x3b>,
-/* 0x3c */ &inc_dec_single_register<0x3c>, &inc_dec_single_register<0x3d>, &ld_n8<0x3e>,                   &no_impl<0x3f>,
+/* 0x3c */ &inc_dec_single_register<0x3c>, &inc_dec_single_register<0x3d>, &ld_n8<0x3e>,                   &ccf<0x3f>,
 /* 0x40 */ &ld_register<0x40>,             &ld_register<0x41>,             &ld_register<0x42>,             &ld_register<0x43>,
 /* 0x44 */ &ld_register<0x44>,             &ld_register<0x45>,             &ld_register<0x46>,             &ld_register<0x47>,
 /* 0x48 */ &ld_register<0x48>,             &ld_register<0x49>,             &ld_register<0x4a>,             &ld_register<0x4b>,

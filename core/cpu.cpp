@@ -909,7 +909,16 @@ template<Byte Opcode>
 void cb_rotate_left(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_left {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        memory = (memory << 1) | (gb.processor.carry_flag);
+        Byte register_value = memory;
+        bool new_carry_flag = register_value >> 7;
+
+        register_value = (memory << 1) | (gb.processor.carry_flag);
+        gb.processor.carry_flag = new_carry_flag;
+        gb.processor.zero_flag = (register_value == 0);
+        gb.processor.subtraction_flag = false;
+        gb.processor.half_carry_flag = false;
+        
+        memory = register_value;
     });
 }
 
@@ -939,8 +948,14 @@ void cb_shift_left_reset(GameBoy& gb) {
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte register_value = memory;
         Byte most_significant_bit = (register_value & 0b10000000);
+
+        register_value = (register_value << 1);
+
         gb.processor.carry_flag = most_significant_bit;
-        memory = (register_value << 1);
+        gb.processor.zero_flag = (register_value == 0);
+        gb.processor.half_carry_flag = false;
+        gb.processor.subtraction_flag = false;
+        memory = register_value;
     });
 }
 
@@ -952,8 +967,14 @@ void cb_shift_right(GameBoy& gb) {
         Byte register_value = memory;
         Byte most_significant_bit = (register_value & 0b10000000);
         Byte least_significant_bit = (register_value & 0b00000001);
+
+        register_value = (register_value >> 1) | (most_significant_bit);
+
         gb.processor.carry_flag = least_significant_bit;
-        memory = (register_value >> 1) | (most_significant_bit);
+        gb.processor.half_carry_flag = false;
+        gb.processor.zero_flag = (register_value == 0);
+        gb.processor.subtraction_flag = false;
+        memory = register_value;
     });
 }
 
@@ -978,7 +999,14 @@ void swap(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb swap {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte register_value = memory;
-        memory = (register_value << 4) | (register_value >> 4);
+
+        register_value = (register_value << 4) | (register_value >> 4);
+        gb.processor.zero_flag = (register_value == 0);
+        gb.processor.subtraction_flag = false;
+        gb.processor.carry_flag = false;
+        gb.processor.half_carry_flag = false;
+
+        memory = register_value;
     });
 }
 

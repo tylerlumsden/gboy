@@ -363,22 +363,35 @@ void ld_n16(GameBoy& gb) {
     }
 }
 
-// TODO: implement variants
 template<Byte Opcode>
+    requires is_one_of<Opcode, 0xc7, 0xd7, 0xe7, 0xf7, 0xcf, 0xdf, 0xef, 0xff>
 void rst(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing rst {:#x}", Opcode);
-    Byte high_byte = hi(gb.processor.program_counter);
-    Byte low_byte = lo(gb.processor.program_counter);
-    auto high_memory = cpu_memory_bus(gb, gb.processor.stack_pointer);
-    high_memory = high_byte;
-    --gb.processor.stack_pointer;
 
-    auto low_memory = cpu_memory_bus(gb, gb.processor.stack_pointer);
-    low_memory = low_byte;
-    --gb.processor.stack_pointer;
-
-
+    push(gb, gb.processor.program_counter);
+    
     m_cycle_tick(gb);
+    if constexpr(Opcode == 0xc7) {
+        gb.processor.program_counter = 0x00;
+    }
+    if constexpr(Opcode == 0xcf) {
+        gb.processor.program_counter = 0x08;
+    }
+    if constexpr(Opcode == 0xd7) {
+        gb.processor.program_counter = 0x10;
+    }
+    if constexpr(Opcode == 0xdf) {
+        gb.processor.program_counter = 0x18;
+    }
+    if constexpr(Opcode == 0xe7) {
+        gb.processor.program_counter = 0x20;
+    }
+    if constexpr(Opcode == 0xef) {
+        gb.processor.program_counter = 0x28;
+    }
+    if constexpr(Opcode == 0xf7) {
+        gb.processor.program_counter = 0x30;
+    }
     if constexpr(Opcode == 0xff) {
         gb.processor.program_counter = 0x38;
     }
@@ -732,9 +745,15 @@ void rotate_right(GameBoy& gb) {
 }
 
 template<Byte Opcode>
-    requires is_one_of<Opcode, 0xc0, 0xd0, 0xc8, 0xd8, 0xc9>
+    requires is_one_of<Opcode, 0xc0, 0xd0, 0xc8, 0xd8, 0xc9, 0xd9>
 void ret(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing ret {:#x}", Opcode);
+
+    // RETI instruction
+    if constexpr(Opcode == 0xd9) {
+        gb.processor.IME = true;
+    }
+
     bool flag = [&]() {
         if constexpr(Opcode != 0xc9) {
             m_cycle_tick(gb);
@@ -744,7 +763,7 @@ void ret(GameBoy& gb) {
         else if constexpr(Opcode == 0xd0) return !gb.processor.carry_flag;
         else if constexpr(Opcode == 0xc8) return gb.processor.zero_flag;
         else if constexpr(Opcode == 0xd8) return gb.processor.carry_flag;
-        else if constexpr(Opcode == 0xc9) return true;
+        else if constexpr(Opcode == 0xc9 || Opcode == 0xd9) return true;
     }();
 
     if(flag) {
@@ -1077,19 +1096,19 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0xb8 */ &arithmetic_register<0xb8>,     &arithmetic_register<0xb9>,     &arithmetic_register<0xba>,     &arithmetic_register<0xbb>,
 /* 0xbc */ &arithmetic_register<0xbc>,     &arithmetic_register<0xbd>,     &arithmetic_register<0xbe>,     &arithmetic_register<0xbf>,
 /* 0xc0 */ &ret<0xc0>,                     &pop_register<0xc1>,            &jp<0xc2>,                      &jp<0xc3>,
-/* 0xc4 */ &call<0xc4>,                    &push_register<0xc5>,           &arithmetic_register<0xc6>,     &no_impl<0xc7>,
+/* 0xc4 */ &call<0xc4>,                    &push_register<0xc5>,           &arithmetic_register<0xc6>,     &rst<0xc7>,
 /* 0xc8 */ &ret<0xc8>,                     &ret<0xc9>,                     &jp<0xca>,                      &cb_prefix<0xcb>,
-/* 0xcc */ &call<0xcc>,                    &call<0xcd>,                    &arithmetic_register<0xce>,     &no_impl<0xcf>,
+/* 0xcc */ &call<0xcc>,                    &call<0xcd>,                    &arithmetic_register<0xce>,     &rst<0xcf>,
 /* 0xd0 */ &ret<0xd0>,                     &pop_register<0xd1>,            &jp<0xd2>,                      &no_impl<0xd3>,
-/* 0xd4 */ &call<0xd4>,                    &push_register<0xd5>,           &arithmetic_register<0xd6>,     &no_impl<0xd7>,
-/* 0xd8 */ &ret<0xd8>,                     &no_impl<0xd9>,                 &jp<0xda>,                      &no_impl<0xdb>,
-/* 0xdc */ &call<0xdc>,                    &no_impl<0xdd>,                 &arithmetic_register<0xde>,     &no_impl<0xdf>,
+/* 0xd4 */ &call<0xd4>,                    &push_register<0xd5>,           &arithmetic_register<0xd6>,     &rst<0xd7>,
+/* 0xd8 */ &ret<0xd8>,                     &ret<0xd9>,                 &jp<0xda>,                      &no_impl<0xdb>,
+/* 0xdc */ &call<0xdc>,                    &no_impl<0xdd>,                 &arithmetic_register<0xde>,     &rst<0xdf>,
 /* 0xe0 */ &ld_address_a_misc<0xe0>,       &pop_register<0xe1>,            &ld_address_a_misc<0xe2>,       &no_impl<0xe3>,
-/* 0xe4 */ &no_impl<0xe4>,                 &push_register<0xe5>,           &arithmetic_register<0xe6>,     &no_impl<0xe7>,
+/* 0xe4 */ &no_impl<0xe4>,                 &push_register<0xe5>,           &arithmetic_register<0xe6>,     &rst<0xe7>,
 /* 0xe8 */ &add_sp_s8<0xe8>,                 &jp<0xe9>,                      &ld_address_a_misc<0xea>,       &no_impl<0xeb>,
-/* 0xec */ &no_impl<0xec>,                 &no_impl<0xed>,                 &arithmetic_register<0xee>,     &no_impl<0xef>,
+/* 0xec */ &no_impl<0xec>,                 &no_impl<0xed>,                 &arithmetic_register<0xee>,     &rst<0xef>,
 /* 0xf0 */ &ld_address_a_misc<0xf0>,       &pop_register<0xf1>,            &ld_address_a_misc<0xf2>,       &di,
-/* 0xf4 */ &no_impl<0xf4>,                 &push_register<0xf5>,           &arithmetic_register<0xf6>,     &no_impl<0xf7>,
+/* 0xf4 */ &no_impl<0xf4>,                 &push_register<0xf5>,           &arithmetic_register<0xf6>,     &rst<0xf7>,
 /* 0xf8 */ &ld_hl_sp_s8<0xf8>,                 &ld_sp_hl<0xf9>,                 &ld_address_a_misc<0xfa>,       &ei<0xfb>,
 /* 0xfc */ &no_impl<0xfc>,                 &no_impl<0xfd>,                 &arithmetic_register<0xfe>,     &rst<0xff>,
 };

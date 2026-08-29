@@ -92,6 +92,18 @@ void write_func(CartridgeType& cartridge, Address addr, Byte data) {
         Byte bank_num = data & (0b00000011);
         cartridge.ram_bank_number = bank_num;
     } 
+    else if(0xa000 <= addr && addr <= 0xbfff) {
+        if(cartridge.ram_enable && cartridge.ram.num_banks > 0) {
+            Double_Byte resolved_address = (addr);
+            if(cartridge.bank_mode && cartridge.ram.num_banks > 1) {
+                resolved_address = (cartridge.ram_bank_number << 13) | resolved_address;
+            }
+            cartridge.ram.data[resolved_address] = data;
+        }
+    }
+    else if(0x6000 <= addr && addr <= 0x7fff) {
+        cartridge.bank_mode = data;
+    }
     else {
         throw std::invalid_argument(std::format(
             "Cartridge: Address {:#x} invalid or not implemented for cartridge write.",

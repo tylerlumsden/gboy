@@ -12,6 +12,11 @@ struct GameBoy {
     Cartridge cart;
     Timer timer;
     Interrupt interrupt;
+    std::array<Byte, 0x2000> vram;
+    std::array<Byte, 0x1000> main_wram;
+    std::array<Byte, 0x1000> banked_wram;
+    std::array<Byte, 0x7f> hram;
+
     std::array<Byte, 0xffff> memory_map;
 
     SM83::CPU processor;

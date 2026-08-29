@@ -125,10 +125,10 @@ Byte read_func(CartridgeType& cartridge, Address addr) {
         // See MBC1 in pandocs for this formula
         Byte working_bank_number = cartridge.rom_bank_number;
         if(working_bank_number == 0) working_bank_number = 1;
-        Quad_Byte resolved_address = 
-        (cartridge.ram_bank_number << 19) | 
-        (cartridge.rom_bank_number << 14) | 
-        (addr);
+    Quad_Byte resolved_address =
+        (static_cast<Quad_Byte>(cartridge.ram_bank_number) << 19) |
+        (static_cast<Quad_Byte>(working_bank_number) << 14) |
+        (addr & 0x3fff);
 
         resolved_address = chop_least(resolved_address, 14 + std::bit_width(cartridge.rom.num_banks - 1));
 

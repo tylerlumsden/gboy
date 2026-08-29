@@ -369,7 +369,7 @@ void rst(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing rst {:#x}", Opcode);
 
     push(gb, gb.processor.program_counter);
-    
+
     m_cycle_tick(gb);
     if constexpr(Opcode == 0xc7) {
         gb.processor.program_counter = 0x00;
@@ -726,6 +726,9 @@ void rotate_left(GameBoy& gb) {
     else if constexpr(Opcode == 0x17) gb.processor.A = (gb.processor.A << 1) | (gb.processor.carry_flag);
 
     gb.processor.carry_flag = most_significant_bit;
+    gb.processor.half_carry_flag = false;
+    gb.processor.zero_flag = false;
+    gb.processor.subtraction_flag = false;
 }
 
 template<Byte Opcode>
@@ -734,7 +737,7 @@ void rotate_right(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing rotate_right {:#x}", Opcode);
     Byte least_significant_bit = (gb.processor.A << 7);
     // Circular rotate
-    if constexpr(Opcode == 0x07) gb.processor.A = (gb.processor.A >> 1) | (least_significant_bit);
+    if constexpr(Opcode == 0x0f) gb.processor.A = (gb.processor.A >> 1) | (least_significant_bit);
     // Rotate through carry flag
     else if constexpr(Opcode == 0x1f) gb.processor.A = (gb.processor.A >> 1) | (gb.processor.carry_flag << 7);
 
@@ -869,10 +872,16 @@ void cb_rotate_left_carry(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_left_carry {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte register_value = memory;
-        Byte most_significant_bit = (register_value & 0b10000000);
+        Byte most_significant_bit = (register_value >> 7);
         gb.processor.carry_flag = most_significant_bit;
+        gb.processor.half_carry_flag = false;
+        gb.processor.subtraction_flag = false;
 
-        memory = (register_value << 1) | most_significant_bit;
+        register_value = (register_value << 1) | most_significant_bit;
+
+        gb.processor.zero_flag = (register_value == 0);
+
+        memory = register_value;
     });
 }
 
@@ -882,10 +891,16 @@ void cb_rotate_right_carry(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb_rotate_right_carry {:#x}", Opcode);
     register_map_apply<Opcode>(gb, [&](auto&& memory) {
         Byte register_value = memory;
-        Byte least_significant_bit = (register_value & 0b00000001);
+        Byte least_significant_bit = (register_value << 7);
         gb.processor.carry_flag = least_significant_bit;
+        gb.processor.half_carry_flag = false;
+        gb.processor.subtraction_flag = false;
 
-        memory = (register_value >> 1) | least_significant_bit;
+        register_value = (register_value >> 1) | least_significant_bit;
+
+        gb.processor.zero_flag = (register_value == 0);
+
+        memory = register_value;
     });
 }
 

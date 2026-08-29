@@ -28,7 +28,8 @@ struct CPU {
     Address stack_pointer = 0xfffe;
     Address program_counter = 0x100;
 
-    bool IME = 0x0;
+    bool IME = false;
+    bool halt_mode = false;
 
     std::string print_state() {
         return std::format(R"(

@@ -796,6 +796,14 @@ void cpl(GameBoy& gb) {
     gb.processor.half_carry_flag = true;
 }
 
+template<Byte Opcode>
+    requires(Opcode == 0x76)
+void halt(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing halt {:#x}", Opcode);
+
+    gb.processor.halt_mode = true;
+}
+
 template<Byte Opcode, typename Func>
 inline constexpr void register_map_apply(GameBoy& gb, Func func) {
     constexpr Byte Regcode = Opcode % 8;
@@ -1022,7 +1030,7 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 /* 0x68 */ &ld_register<0x68>,             &ld_register<0x69>,             &ld_register<0x6a>,             &ld_register<0x6b>,
 /* 0x6c */ &ld_register<0x6c>,             &ld_register<0x6d>,             &ld_register<0x6e>,             &ld_register<0x6f>,
 /* 0x70 */ &ld_register<0x70>,             &ld_register<0x71>,             &ld_register<0x72>,             &ld_register<0x73>,
-/* 0x74 */ &ld_register<0x74>,             &ld_register<0x75>,             &no_impl<0x76>,                 &ld_register<0x77>,
+/* 0x74 */ &ld_register<0x74>,             &ld_register<0x75>,             &halt<0x76>,                 &ld_register<0x77>,
 /* 0x78 */ &ld_register<0x78>,             &ld_register<0x79>,             &ld_register<0x7a>,             &ld_register<0x7b>,
 /* 0x7c */ &ld_register<0x7c>,             &ld_register<0x7d>,             &ld_register<0x7e>,             &ld_register<0x7f>,
 /* 0x80 */ &arithmetic_register<0x80>,     &arithmetic_register<0x81>,     &arithmetic_register<0x82>,     &arithmetic_register<0x83>,
@@ -1072,14 +1080,21 @@ void log_debug_state(GameBoy& gb) {
 
 void poll_and_handle_interrupts(GameBoy& gb) {
 
+    Byte interrupt_enable = gb.interrupt.interrupt_enable;
+    Byte interrupt_flag = gb.interrupt.interrupt_flag;
+
+    // If there exists some interrupt which is both enabled and being requested
+    // Or the interrupt master enable is set
+    if((interrupt_enable & interrupt_flag) || gb.processor.IME) {
+        gb.processor.halt_mode = false;
+    }
+
     // DMG interrupts: 
     // 0: VBlank, handler: 0x0040
     // 1: LCD, handler: 0x0048
     // 2: Timer, handler: 0x0050
     // 3: Serial, handler: 0x0058
     // 4: Joypad, handler: 0x0060
-    Byte interrupt_enable = memory_bus(gb, 0xffff);
-    Byte interrupt_flag = memory_bus(gb, 0xff0f);
     std::bitset<8> enable_list(interrupt_enable);
     std::bitset<8> request_list(interrupt_flag);
     std::array<Address, 5> interrupt_handlers = {0x0040, 0x0048, 0x0050, 0x0058, 0x0060}; 
@@ -1106,18 +1121,21 @@ void poll_and_handle_interrupts(GameBoy& gb) {
 
 void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {
-        log_debug_state(gb);
-        Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
-
         poll_and_handle_interrupts(gb);
+        if(!gb.processor.halt_mode) {
+            log_debug_state(gb);
+            Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
 
-        Byte next_instruction = fetch(gb);
+            Byte next_instruction = fetch(gb);
 
-        std::invoke(instruction_handler[next_instruction], gb);
-        Log::log<Log::Level::Verbose>("End instruction loop\n");
+            std::invoke(instruction_handler[next_instruction], gb);
+            Log::log<Log::Level::Verbose>("End instruction loop\n");
 
-        Log::log<Log::Level::Verbose>("{}", gb.processor.print_state());
-        Log::log<Log::Level::Verbose>("{}", gb.timer.print_state());
-        Log::log<Log::Level::Verbose>("{}", gb.interrupt.print_state());
+            Log::log<Log::Level::Verbose>("{}", gb.processor.print_state());
+            Log::log<Log::Level::Verbose>("{}", gb.timer.print_state());
+            Log::log<Log::Level::Verbose>("{}", gb.interrupt.print_state());
+        } else {
+            m_cycle_tick(gb);
+        }
     }
 }

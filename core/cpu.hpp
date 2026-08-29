@@ -3,7 +3,6 @@
 #include "data_types.hpp"
 
 #include <format>
-#include <string>
 
 template <auto Val, auto... Candidates>
 constexpr bool is_one_of = ((Val == Candidates) || ...);
@@ -31,9 +30,18 @@ struct CPU {
     bool IME = false;
     bool halt_mode = false;
     bool stop_mode = false;
+};
 
-    std::string print_state() {
-        return std::format(R"(
+}
+
+template <>
+struct std::formatter<SM83::CPU> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(const SM83::CPU& cpu, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), R"(
             CPU State:
             A: {:#x}
             zero_flag: {:#x}
@@ -50,10 +58,8 @@ struct CPU {
             program_counter: {:#x}
             IME: {:#x}
             )",
-            A, zero_flag, subtraction_flag, half_carry_flag, carry_flag,
-            B, C, D, E, H, L, stack_pointer, program_counter, IME
+            cpu.A, cpu.zero_flag, cpu.subtraction_flag, cpu.half_carry_flag, cpu.carry_flag,
+            cpu.B, cpu.C, cpu.D, cpu.E, cpu.H, cpu.L, cpu.stack_pointer, cpu.program_counter, cpu.IME
         );
     }
 };
-
-}

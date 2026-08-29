@@ -6,25 +6,25 @@
 
 namespace Log {
 
-constexpr int LOGMAX = 5;
+constexpr int LOGMAX = 4;
 
 enum Level {
-    Doctor = LOGMAX,
-    Forced = 4,
+    Forced = LOGMAX,
     Error = 3,
     Info = 2,
     Debug = 1,
-    Verbose = 0
+    Verbose = 0,
+    Doctor = -1
 };
 
 constexpr auto log_level_string(Level log_level) {
     switch(log_level) {
-    case Level::Doctor: return "DOCTOR";
     case Level::Forced: return "FORCED";
     case Level::Error: return "ERROR";
     case Level::Info: return "INFO";
     case Level::Debug: return "DEBUG";
     case Level::Verbose: return "VERBOSE";
+    case Level::Doctor: return "DOCTOR";
     default: return "UNKNOWN LOG LEVEL";
     }
 }
@@ -39,10 +39,14 @@ struct Logger {
 
 template<Level MsgLevel>
 void write_to_loggers(const std::string& message) {
-    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        ((Logger::get_logger<static_cast<Level>(Is)>()
-          << std::format("{}: {}\n", log_level_string(MsgLevel), message)), ...);
-    }(std::make_index_sequence<MsgLevel + 1>{});
+    if constexpr(MsgLevel >= LOG_LEVEL) {
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            if(MsgLevel >= LOG_LEVEL) {
+                ((Logger::get_logger<static_cast<Level>(LOG_LEVEL + Is)>()
+                << std::format("{}: {}\n", log_level_string(MsgLevel), message)), ...);
+            }
+        }(std::make_index_sequence<MsgLevel - LOG_LEVEL + 1>{});
+    }
 }
 
 template<Level LogLevel, typename... Args>

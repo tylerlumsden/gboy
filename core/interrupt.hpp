@@ -1,5 +1,4 @@
 #pragma once
-#include <string>
 #include <format>
 
 #include "data_types.hpp"
@@ -7,14 +6,21 @@
 struct Interrupt {
     Byte interrupt_flag = 0xe1;
     Byte interrupt_enable = 0x00;
+};
 
-    std::string print_state() {
-        return std::format(R"(
+template <>
+struct std::formatter<Interrupt> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(const Interrupt& interrupt, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), R"(
             Interrupt State:
             interrupt_flag: {:#x}
             interrupt_enable: {:#x}
             )",
-            interrupt_flag, interrupt_enable
+            interrupt.interrupt_flag, interrupt.interrupt_enable
         );
     }
 };

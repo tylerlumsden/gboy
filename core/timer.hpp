@@ -1,7 +1,6 @@
 #pragma once
 
 #include <format>
-#include <string>
 
 #include "data_types.hpp"
 
@@ -15,9 +14,16 @@ struct Timer {
     Byte control = 0xf8;
     bool overflow_flag = false;
     bool overflow_latch = false;
+};
 
-    std::string print_state() {
-        return std::format(R"(
+template <>
+struct std::formatter<Timer> {
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(const Timer& timer, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), R"(
             Timer State:
             cycles_per_second: {}
             system_counter: {:#x}
@@ -26,7 +32,8 @@ struct Timer {
             control: {:#x}
             overflow: {}
             )",
-            cycles_per_second, system_counter, counter, modulo, control, overflow_flag
+            timer.cycles_per_second, timer.system_counter, timer.counter,
+            timer.modulo, timer.control, timer.overflow_flag
         );
     }
 };

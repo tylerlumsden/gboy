@@ -30,6 +30,7 @@ struct CPU {
 
     bool IME = false;
     bool halt_mode = false;
+    bool stop_mode = false;
 
     std::string print_state() {
         return std::format(R"(

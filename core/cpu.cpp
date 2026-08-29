@@ -623,11 +623,12 @@ void arithmetic_register(GameBoy& gb) {
         gb.processor.subtraction_flag = true;
     }
     else if constexpr(instruction_row == 0x10 && instruction_col == 0x01) {
-        gb.processor.carry_flag = carry_sub(gb.processor.A, data, gb.processor.carry_flag);
+        bool new_carry_flag = carry_sub(gb.processor.A, data, gb.processor.carry_flag);
         gb.processor.half_carry_flag = half_carry_sub(gb.processor.A, data, gb.processor.carry_flag);
 
         gb.processor.A = gb.processor.A - data - gb.processor.carry_flag;
 
+        gb.processor.carry_flag = new_carry_flag;
         gb.processor.zero_flag = (gb.processor.A == 0);
         gb.processor.subtraction_flag = true;
     }
@@ -802,6 +803,14 @@ void halt(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing halt {:#x}", Opcode);
 
     gb.processor.halt_mode = true;
+}
+
+template<Byte Opcode>
+    requires(Opcode == 0x10)
+void stop(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing stop {:#x}", Opcode);
+
+    gb.processor.stop_mode = true;
 }
 
 template<Byte Opcode, typename Func>
@@ -1121,6 +1130,10 @@ void poll_and_handle_interrupts(GameBoy& gb) {
 
 void SM83::fetch_decode_execute(GameBoy& gb) {
     while(true) {
+        if(gb.processor.stop_mode) {
+            continue;
+        }
+
         poll_and_handle_interrupts(gb);
         if(!gb.processor.halt_mode) {
             log_debug_state(gb);

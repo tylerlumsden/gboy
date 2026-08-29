@@ -24,6 +24,12 @@ Byte read(GameBoy& gb, Address addr) {
         // Placeholder for the LY until it gets implemented
         return 0x90;
     }
+    else if(addr == 0xff0f) {
+        return gb.interrupt.interrupt_flag;
+    }
+    else if(addr == 0xffff) {
+        return gb.interrupt.interrupt_enable;
+    }
     else {
         return gb.memory_map[addr];
         /*
@@ -47,6 +53,12 @@ void write(GameBoy& gb, Address addr, Byte data) {
     }
     else if(0xff04 <= addr && addr <= 0xff07) {
         TIMER::write(gb.timer, addr, data);
+    }
+    else if(addr == 0xff0f) {
+        gb.interrupt.interrupt_flag = data;
+    }
+    else if(addr == 0xffff) {
+        gb.interrupt.interrupt_enable = data;
     }
     else {
         gb.memory_map[addr] = data;

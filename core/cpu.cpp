@@ -1118,5 +1118,6 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
 
         Log::log<Log::Level::Verbose>("{}", gb.processor.print_state());
         Log::log<Log::Level::Verbose>("{}", gb.timer.print_state());
+        Log::log<Log::Level::Verbose>("{}", gb.interrupt.print_state());
     }
 }

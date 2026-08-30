@@ -979,21 +979,6 @@ void cb_shift_right(GameBoy& gb) {
 }
 
 template<Byte Opcode>
-    requires (0x38 <= Opcode && Opcode <= 0x3f)
-void cb_shift_right_reset(GameBoy& gb) {
-    Log::log<Log::Level::Verbose>("Executing cb shift_right_reset {:#x}", Opcode);
-    register_map_apply<Opcode>(gb, [&](auto&& memory) {
-        Byte register_value = memory;
-        gb.processor.carry_flag = (register_value & 0b00000001);
-        register_value = (register_value >> 1);
-        memory = register_value;
-        gb.processor.zero_flag = (register_value == 0);
-        gb.processor.half_carry_flag = false;
-        gb.processor.subtraction_flag = false;
-    });
-}
-
-template<Byte Opcode>
     requires(0x30 <= Opcode && Opcode <= 0x37)
 void swap(GameBoy& gb) {
     Log::log<Log::Level::Verbose>("Executing cb swap {:#x}", Opcode);
@@ -1009,6 +994,69 @@ void swap(GameBoy& gb) {
         memory = register_value;
     });
 }
+
+template<Byte Opcode>
+    requires (0x38 <= Opcode && Opcode <= 0x3f)
+void cb_shift_right_reset(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing cb shift_right_reset {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte register_value = memory;
+        gb.processor.carry_flag = (register_value & 0b00000001);
+        register_value = (register_value >> 1);
+        memory = register_value;
+        gb.processor.zero_flag = (register_value == 0);
+        gb.processor.half_carry_flag = false;
+        gb.processor.subtraction_flag = false;
+    });
+}
+
+template<Byte Opcode>
+    requires(0x40 <= Opcode && Opcode <= 0x7f)
+void bit(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing cb bit {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte register_value = memory;
+
+        constexpr Byte bit_index = (Opcode - 0x40) / 8;
+
+        gb.processor.zero_flag = !bit_array(register_value)[bit_index];
+        gb.processor.subtraction_flag = false;
+        gb.processor.half_carry_flag = true;
+    });
+}
+
+template<Byte Opcode>
+    requires(0x80 <= Opcode && Opcode <= 0xbf)
+void res(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing cb res {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte register_value = memory;
+
+        constexpr Byte bit_index = (Opcode - 0x80) / 8;
+
+        Byte mask = (1 << bit_index);
+        register_value = (register_value & ~mask);
+
+        memory = register_value;
+    });
+}
+
+template<Byte Opcode>
+    requires(0xc0 <= Opcode && Opcode <= 0xff)
+void set(GameBoy& gb) {
+    Log::log<Log::Level::Verbose>("Executing cb set {:#x}", Opcode);
+    register_map_apply<Opcode>(gb, [&](auto&& memory) {
+        Byte register_value = memory;
+
+        constexpr Byte bit_index = (Opcode - 0xc0) / 8;
+
+        Byte mask = (1 << bit_index);
+        register_value = (register_value | mask);
+
+        memory = register_value;
+    });
+}
+
 
 // --- Dispatch table ---
 
@@ -1031,54 +1079,54 @@ const std::array<InstructionFunc, 256> prefixed_instruction_handler = {
 /* 0x34 */ &swap<0x34>, &swap<0x35>, &swap<0x36>, &swap<0x37>,
 /* 0x38 */ &cb_shift_right_reset<0x38>, &cb_shift_right_reset<0x39>, &cb_shift_right_reset<0x3a>, &cb_shift_right_reset<0x3b>,
 /* 0x3c */ &cb_shift_right_reset<0x3c>, &cb_shift_right_reset<0x3d>, &cb_shift_right_reset<0x3e>, &cb_shift_right_reset<0x3f>,
-/* 0x40 */ &cb_no_impl<0x40>, &cb_no_impl<0x41>, &cb_no_impl<0x42>, &cb_no_impl<0x43>,
-/* 0x44 */ &cb_no_impl<0x44>, &cb_no_impl<0x45>, &cb_no_impl<0x46>, &cb_no_impl<0x47>,
-/* 0x48 */ &cb_no_impl<0x48>, &cb_no_impl<0x49>, &cb_no_impl<0x4a>, &cb_no_impl<0x4b>,
-/* 0x4c */ &cb_no_impl<0x4c>, &cb_no_impl<0x4d>, &cb_no_impl<0x4e>, &cb_no_impl<0x4f>,
-/* 0x50 */ &cb_no_impl<0x50>, &cb_no_impl<0x51>, &cb_no_impl<0x52>, &cb_no_impl<0x53>,
-/* 0x54 */ &cb_no_impl<0x54>, &cb_no_impl<0x55>, &cb_no_impl<0x56>, &cb_no_impl<0x57>,
-/* 0x58 */ &cb_no_impl<0x58>, &cb_no_impl<0x59>, &cb_no_impl<0x5a>, &cb_no_impl<0x5b>,
-/* 0x5c */ &cb_no_impl<0x5c>, &cb_no_impl<0x5d>, &cb_no_impl<0x5e>, &cb_no_impl<0x5f>,
-/* 0x60 */ &cb_no_impl<0x60>, &cb_no_impl<0x61>, &cb_no_impl<0x62>, &cb_no_impl<0x63>,
-/* 0x64 */ &cb_no_impl<0x64>, &cb_no_impl<0x65>, &cb_no_impl<0x66>, &cb_no_impl<0x67>,
-/* 0x68 */ &cb_no_impl<0x68>, &cb_no_impl<0x69>, &cb_no_impl<0x6a>, &cb_no_impl<0x6b>,
-/* 0x6c */ &cb_no_impl<0x6c>, &cb_no_impl<0x6d>, &cb_no_impl<0x6e>, &cb_no_impl<0x6f>,
-/* 0x70 */ &cb_no_impl<0x70>, &cb_no_impl<0x71>, &cb_no_impl<0x72>, &cb_no_impl<0x73>,
-/* 0x74 */ &cb_no_impl<0x74>, &cb_no_impl<0x75>, &cb_no_impl<0x76>, &cb_no_impl<0x77>,
-/* 0x78 */ &cb_no_impl<0x78>, &cb_no_impl<0x79>, &cb_no_impl<0x7a>, &cb_no_impl<0x7b>,
-/* 0x7c */ &cb_no_impl<0x7c>, &cb_no_impl<0x7d>, &cb_no_impl<0x7e>, &cb_no_impl<0x7f>,
-/* 0x80 */ &cb_no_impl<0x80>, &cb_no_impl<0x81>, &cb_no_impl<0x82>, &cb_no_impl<0x83>,
-/* 0x84 */ &cb_no_impl<0x84>, &cb_no_impl<0x85>, &cb_no_impl<0x86>, &cb_no_impl<0x87>,
-/* 0x88 */ &cb_no_impl<0x88>, &cb_no_impl<0x89>, &cb_no_impl<0x8a>, &cb_no_impl<0x8b>,
-/* 0x8c */ &cb_no_impl<0x8c>, &cb_no_impl<0x8d>, &cb_no_impl<0x8e>, &cb_no_impl<0x8f>,
-/* 0x90 */ &cb_no_impl<0x90>, &cb_no_impl<0x91>, &cb_no_impl<0x92>, &cb_no_impl<0x93>,
-/* 0x94 */ &cb_no_impl<0x94>, &cb_no_impl<0x95>, &cb_no_impl<0x96>, &cb_no_impl<0x97>,
-/* 0x98 */ &cb_no_impl<0x98>, &cb_no_impl<0x99>, &cb_no_impl<0x9a>, &cb_no_impl<0x9b>,
-/* 0x9c */ &cb_no_impl<0x9c>, &cb_no_impl<0x9d>, &cb_no_impl<0x9e>, &cb_no_impl<0x9f>,
-/* 0xa0 */ &cb_no_impl<0xa0>, &cb_no_impl<0xa1>, &cb_no_impl<0xa2>, &cb_no_impl<0xa3>,
-/* 0xa4 */ &cb_no_impl<0xa4>, &cb_no_impl<0xa5>, &cb_no_impl<0xa6>, &cb_no_impl<0xa7>,
-/* 0xa8 */ &cb_no_impl<0xa8>, &cb_no_impl<0xa9>, &cb_no_impl<0xaa>, &cb_no_impl<0xab>,
-/* 0xac */ &cb_no_impl<0xac>, &cb_no_impl<0xad>, &cb_no_impl<0xae>, &cb_no_impl<0xaf>,
-/* 0xb0 */ &cb_no_impl<0xb0>, &cb_no_impl<0xb1>, &cb_no_impl<0xb2>, &cb_no_impl<0xb3>,
-/* 0xb4 */ &cb_no_impl<0xb4>, &cb_no_impl<0xb5>, &cb_no_impl<0xb6>, &cb_no_impl<0xb7>,
-/* 0xb8 */ &cb_no_impl<0xb8>, &cb_no_impl<0xb9>, &cb_no_impl<0xba>, &cb_no_impl<0xbb>,
-/* 0xbc */ &cb_no_impl<0xbc>, &cb_no_impl<0xbd>, &cb_no_impl<0xbe>, &cb_no_impl<0xbf>,
-/* 0xc0 */ &cb_no_impl<0xc0>, &cb_no_impl<0xc1>, &cb_no_impl<0xc2>, &cb_no_impl<0xc3>,
-/* 0xc4 */ &cb_no_impl<0xc4>, &cb_no_impl<0xc5>, &cb_no_impl<0xc6>, &cb_no_impl<0xc7>,
-/* 0xc8 */ &cb_no_impl<0xc8>, &cb_no_impl<0xc9>, &cb_no_impl<0xca>, &cb_no_impl<0xcb>,
-/* 0xcc */ &cb_no_impl<0xcc>, &cb_no_impl<0xcd>, &cb_no_impl<0xce>, &cb_no_impl<0xcf>,
-/* 0xd0 */ &cb_no_impl<0xd0>, &cb_no_impl<0xd1>, &cb_no_impl<0xd2>, &cb_no_impl<0xd3>,
-/* 0xd4 */ &cb_no_impl<0xd4>, &cb_no_impl<0xd5>, &cb_no_impl<0xd6>, &cb_no_impl<0xd7>,
-/* 0xd8 */ &cb_no_impl<0xd8>, &cb_no_impl<0xd9>, &cb_no_impl<0xda>, &cb_no_impl<0xdb>,
-/* 0xdc */ &cb_no_impl<0xdc>, &cb_no_impl<0xdd>, &cb_no_impl<0xde>, &cb_no_impl<0xdf>,
-/* 0xe0 */ &cb_no_impl<0xe0>, &cb_no_impl<0xe1>, &cb_no_impl<0xe2>, &cb_no_impl<0xe3>,
-/* 0xe4 */ &cb_no_impl<0xe4>, &cb_no_impl<0xe5>, &cb_no_impl<0xe6>, &cb_no_impl<0xe7>,
-/* 0xe8 */ &cb_no_impl<0xe8>, &cb_no_impl<0xe9>, &cb_no_impl<0xea>, &cb_no_impl<0xeb>,
-/* 0xec */ &cb_no_impl<0xec>, &cb_no_impl<0xed>, &cb_no_impl<0xee>, &cb_no_impl<0xef>,
-/* 0xf0 */ &cb_no_impl<0xf0>, &cb_no_impl<0xf1>, &cb_no_impl<0xf2>, &cb_no_impl<0xf3>,
-/* 0xf4 */ &cb_no_impl<0xf4>, &cb_no_impl<0xf5>, &cb_no_impl<0xf6>, &cb_no_impl<0xf7>,
-/* 0xf8 */ &cb_no_impl<0xf8>, &cb_no_impl<0xf9>, &cb_no_impl<0xfa>, &cb_no_impl<0xfb>,
-/* 0xfc */ &cb_no_impl<0xfc>, &cb_no_impl<0xfd>, &cb_no_impl<0xfe>, &cb_no_impl<0xff>,
+/* 0x40 */ &bit<0x40>, &bit<0x41>, &bit<0x42>, &bit<0x43>,
+/* 0x44 */ &bit<0x44>, &bit<0x45>, &bit<0x46>, &bit<0x47>,
+/* 0x48 */ &bit<0x48>, &bit<0x49>, &bit<0x4a>, &bit<0x4b>,
+/* 0x4c */ &bit<0x4c>, &bit<0x4d>, &bit<0x4e>, &bit<0x4f>,
+/* 0x50 */ &bit<0x50>, &bit<0x51>, &bit<0x52>, &bit<0x53>,
+/* 0x54 */ &bit<0x54>, &bit<0x55>, &bit<0x56>, &bit<0x57>,
+/* 0x58 */ &bit<0x58>, &bit<0x59>, &bit<0x5a>, &bit<0x5b>,
+/* 0x5c */ &bit<0x5c>, &bit<0x5d>, &bit<0x5e>, &bit<0x5f>,
+/* 0x60 */ &bit<0x60>, &bit<0x61>, &bit<0x62>, &bit<0x63>,
+/* 0x64 */ &bit<0x64>, &bit<0x65>, &bit<0x66>, &bit<0x67>,
+/* 0x68 */ &bit<0x68>, &bit<0x69>, &bit<0x6a>, &bit<0x6b>,
+/* 0x6c */ &bit<0x6c>, &bit<0x6d>, &bit<0x6e>, &bit<0x6f>,
+/* 0x70 */ &bit<0x70>, &bit<0x71>, &bit<0x72>, &bit<0x73>,
+/* 0x74 */ &bit<0x74>, &bit<0x75>, &bit<0x76>, &bit<0x77>,
+/* 0x78 */ &bit<0x78>, &bit<0x79>, &bit<0x7a>, &bit<0x7b>,
+/* 0x7c */ &bit<0x7c>, &bit<0x7d>, &bit<0x7e>, &bit<0x7f>,
+/* 0x80 */ &res<0x80>, &res<0x81>, &res<0x82>, &res<0x83>,
+/* 0x84 */ &res<0x84>, &res<0x85>, &res<0x86>, &res<0x87>,
+/* 0x88 */ &res<0x88>, &res<0x89>, &res<0x8a>, &res<0x8b>,
+/* 0x8c */ &res<0x8c>, &res<0x8d>, &res<0x8e>, &res<0x8f>,
+/* 0x90 */ &res<0x90>, &res<0x91>, &res<0x92>, &res<0x93>,
+/* 0x94 */ &res<0x94>, &res<0x95>, &res<0x96>, &res<0x97>,
+/* 0x98 */ &res<0x98>, &res<0x99>, &res<0x9a>, &res<0x9b>,
+/* 0x9c */ &res<0x9c>, &res<0x9d>, &res<0x9e>, &res<0x9f>,
+/* 0xa0 */ &res<0xa0>, &res<0xa1>, &res<0xa2>, &res<0xa3>,
+/* 0xa4 */ &res<0xa4>, &res<0xa5>, &res<0xa6>, &res<0xa7>,
+/* 0xa8 */ &res<0xa8>, &res<0xa9>, &res<0xaa>, &res<0xab>,
+/* 0xac */ &res<0xac>, &res<0xad>, &res<0xae>, &res<0xaf>,
+/* 0xb0 */ &res<0xb0>, &res<0xb1>, &res<0xb2>, &res<0xb3>,
+/* 0xb4 */ &res<0xb4>, &res<0xb5>, &res<0xb6>, &res<0xb7>,
+/* 0xb8 */ &res<0xb8>, &res<0xb9>, &res<0xba>, &res<0xbb>,
+/* 0xbc */ &res<0xbc>, &res<0xbd>, &res<0xbe>, &res<0xbf>,
+/* 0xc0 */ &set<0xc0>, &set<0xc1>, &set<0xc2>, &set<0xc3>,
+/* 0xc4 */ &set<0xc4>, &set<0xc5>, &set<0xc6>, &set<0xc7>,
+/* 0xc8 */ &set<0xc8>, &set<0xc9>, &set<0xca>, &set<0xcb>,
+/* 0xcc */ &set<0xcc>, &set<0xcd>, &set<0xce>, &set<0xcf>,
+/* 0xd0 */ &set<0xd0>, &set<0xd1>, &set<0xd2>, &set<0xd3>,
+/* 0xd4 */ &set<0xd4>, &set<0xd5>, &set<0xd6>, &set<0xd7>,
+/* 0xd8 */ &set<0xd8>, &set<0xd9>, &set<0xda>, &set<0xdb>,
+/* 0xdc */ &set<0xdc>, &set<0xdd>, &set<0xde>, &set<0xdf>,
+/* 0xe0 */ &set<0xe0>, &set<0xe1>, &set<0xe2>, &set<0xe3>,
+/* 0xe4 */ &set<0xe4>, &set<0xe5>, &set<0xe6>, &set<0xe7>,
+/* 0xe8 */ &set<0xe8>, &set<0xe9>, &set<0xea>, &set<0xeb>,
+/* 0xec */ &set<0xec>, &set<0xed>, &set<0xee>, &set<0xef>,
+/* 0xf0 */ &set<0xf0>, &set<0xf1>, &set<0xf2>, &set<0xf3>,
+/* 0xf4 */ &set<0xf4>, &set<0xf5>, &set<0xf6>, &set<0xf7>,
+/* 0xf8 */ &set<0xf8>, &set<0xf9>, &set<0xfa>, &set<0xfb>,
+/* 0xfc */ &set<0xfc>, &set<0xfd>, &set<0xfe>, &set<0xff>,
 };
 
 template<Byte Opcode>

@@ -3,6 +3,7 @@
 
 #include "gameboy.hpp"
 #include "frontend.hpp"
+#include "event.hpp"
 #include "log.hpp"
 
 int main(int argc, char ** argv) {
@@ -16,10 +17,18 @@ int main(int argc, char ** argv) {
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
         Frontend ctx(640, 480);
-        GB::GameBoy device(game, [](const std::array<Quad_Byte, 23040>&) {
+
+        bool running = true;
+        GB::GameBoy device(game, [&](const std::array<Quad_Byte, 23040>&) {
+            for(Event_Type event : poll_events(ctx)) {
+                switch(event) {
+                case(Event_Type::QUIT):
+                    running = false;
+                }
+            }
         });
 
-        while(true) {
+        while(running) {
             device.run();
         }
     } catch(const std::exception& e) {

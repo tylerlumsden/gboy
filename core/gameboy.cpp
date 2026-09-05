@@ -7,7 +7,9 @@
 
 namespace GB {
 
-GameBoy::GameBoy(Cartridge cartridge) : cart(cartridge) {}
+GameBoy::GameBoy(Cartridge cartridge, FrameBufferCallback callback) : cart(cartridge) {
+    this->ppu.frame_buffer_callback = callback;
+}
 
 Byte read(GameBoy& gb, Address addr) {
     Log::log<Log::Level::Debug>("Reading from memory address {:#x}", addr);

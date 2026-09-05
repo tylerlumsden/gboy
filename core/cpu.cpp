@@ -1257,26 +1257,24 @@ void poll_and_handle_interrupts(GameBoy& gb) {
 }
 
 void SM83::fetch_decode_execute(GameBoy& gb) {
-    while(true) {
-        if(gb.processor.stop_mode) {
-            continue;
-        }
+    if(gb.processor.stop_mode) {
+        return;
+    }
+    
+    poll_and_handle_interrupts(gb);
+    if(!gb.processor.halt_mode) {
+        log_debug_state(gb);
+        Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
 
-        poll_and_handle_interrupts(gb);
-        if(!gb.processor.halt_mode) {
-            log_debug_state(gb);
-            Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
+        Byte next_instruction = fetch(gb);
 
-            Byte next_instruction = fetch(gb);
+        std::invoke(instruction_handler[next_instruction], gb);
+        Log::log<Log::Level::Verbose>("End instruction loop\n");
 
-            std::invoke(instruction_handler[next_instruction], gb);
-            Log::log<Log::Level::Verbose>("End instruction loop\n");
-
-            Log::log<Log::Level::Verbose>("{}", gb.processor);
-            Log::log<Log::Level::Verbose>("{}", gb.timer);
-            Log::log<Log::Level::Verbose>("{}", gb.interrupt);
-        } else {
-            m_cycle_tick(gb);
-        }
+        Log::log<Log::Level::Verbose>("{}", gb.processor);
+        Log::log<Log::Level::Verbose>("{}", gb.timer);
+        Log::log<Log::Level::Verbose>("{}", gb.interrupt);
+    } else {
+        m_cycle_tick(gb);
     }
 }

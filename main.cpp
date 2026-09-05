@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "gameboy.hpp"
+#include "frontend.hpp"
 #include "log.hpp"
 
 int main(int argc, char ** argv) {
@@ -14,8 +15,13 @@ int main(int argc, char ** argv) {
         
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
-        GB::GameBoy device(game);
-        device.run();
+        Frontend ctx(640, 480);
+        GB::GameBoy device(game, [](const std::array<Quad_Byte, 23040>&) {
+        });
+
+        while(true) {
+            device.run();
+        }
     } catch(const std::exception& e) {
         std::cerr << "Fatal exception: " << e.what() << "\n";
         Log::log<Log::Level::Error>("Fatal exception: {}", e.what());

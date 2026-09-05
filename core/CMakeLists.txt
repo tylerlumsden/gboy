@@ -3,11 +3,9 @@ add_library(core STATIC
     cartridge.cpp
     cpu.cpp
     timer.cpp
+    ppu.cpp
 )
 
-if(NOT DEFINED LOG_LEVEL)
-    set(LOG_LEVEL 1)
-endif()
 target_compile_definitions(core PUBLIC LOG_LEVEL=${LOG_LEVEL})
 
 target_include_directories(core

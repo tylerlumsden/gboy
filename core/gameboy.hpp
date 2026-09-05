@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cartridge.hpp"
+#include "ppu.hpp"
 #include "cpu.hpp"
 #include "timer.hpp"
 #include "interrupt.hpp"
@@ -10,6 +11,7 @@ namespace GB {
 
 struct GameBoy {
     Cartridge cart;
+    PPU ppu;
     Timer timer;
     Interrupt interrupt;
     std::array<Byte, 0x2000> vram;
@@ -23,7 +25,7 @@ struct GameBoy {
 
     void run();
 
-    GameBoy(Cartridge cartridge);
+    GameBoy(Cartridge cartridge, FrameBufferCallback callback);
     GameBoy() = delete;
 };
 

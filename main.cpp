@@ -16,10 +16,16 @@ int main(int argc, char ** argv) {
         
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
-        Frontend ctx(640, 480);
+        Frontend ctx(160, 144);
 
         bool running = true;
-        GB::GameBoy device(game, [&](const std::array<Quad_Byte, 23040>&) {
+        GB::GameBoy device(game, [&](std::array<Quad_Byte, 160 * 144>& buf) {
+            for(auto& pixel : buf) {
+                pixel = 0xFF123415;
+            }
+            if(!render_buffer(ctx, buf)) {
+                throw std::runtime_error("Unable to render buffer");
+            };
             for(Event_Type event : poll_events(ctx)) {
                 switch(event) {
                 case(Event_Type::QUIT):

@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "event.hpp"
+#include "data_types.hpp"
+#include "display.hpp"
 
 
 
@@ -21,6 +23,6 @@ struct Frontend {
 };
 
 
-bool render_buffer(Frontend& ctx, const std::array<uint32_t, 160 * 144>& frame_buffer);
+bool render_buffer(Frontend& ctx, const FrameBuffer& frame_buffer);
 
 std::vector<Event_Type> poll_events(Frontend& ctx);

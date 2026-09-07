@@ -28,7 +28,8 @@
         "binaryDir": "build/profile",
         "cacheVariables": {
             "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-            "LOG_LEVEL": "6"
+            "LOG_LEVEL": "6",
+            "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls"
         }
     }
   ]

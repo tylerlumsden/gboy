@@ -8,6 +8,7 @@
 
 Frontend::Frontend(unsigned int width, unsigned int height) {
     SDL_Init(SDL_INIT_VIDEO);
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 
     if(!SDL_CreateWindowAndRenderer(
         "Window", 
@@ -22,8 +23,8 @@ Frontend::Frontend(unsigned int width, unsigned int height) {
         this->renderer, 
         SDL_PIXELFORMAT_ARGB8888, 
         SDL_TEXTUREACCESS_STREAMING, 
-        width,
-        height
+        GB_Width,
+        GB_Height
     );
 
     if(!buffer) {
@@ -38,10 +39,10 @@ Frontend::~Frontend() {
     SDL_Quit();
 }
 
-bool render_buffer(Frontend& ctx, const std::array<uint32_t, 160 * 144>& frame_buffer) {
-    if(!SDL_UpdateTexture(ctx.buffer, NULL, frame_buffer.data(), 160 * sizeof(uint32_t))) {
+bool render_buffer(Frontend& ctx, const FrameBuffer& frame_buffer) {
+    if(!SDL_UpdateTexture(ctx.buffer, NULL, frame_buffer.data(), GB_Width * sizeof(Quad_Byte))) {
         return false;
-    };
+    }
     if(!SDL_RenderClear(ctx.renderer)) {
         return false;
     }

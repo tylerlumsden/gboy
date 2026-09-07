@@ -14,5 +14,6 @@ add_executable(main main.cpp)
 
 add_subdirectory(core)
 add_subdirectory(frontend)
+add_subdirectory(common)
 target_link_libraries(main PRIVATE core frontend)
 

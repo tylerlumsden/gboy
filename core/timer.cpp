@@ -52,9 +52,10 @@ void check_and_trigger_counter(Timer& timer, Func callback) {
     }
 }
 
-void t_cycle_tick(GameBoy& gb) {
+void m_cycle_tick(GameBoy& gb) {
     auto tick_func = [&gb]() {
-        gb.timer.system_counter += 1;
+        // one m_cycle_tick = 4 t_cycle_tick
+        gb.timer.system_counter += 4;
 
         gb.timer.overflow_latch = false;
         if(gb.timer.overflow_flag) {
@@ -66,18 +67,9 @@ void t_cycle_tick(GameBoy& gb) {
     };
     check_and_trigger_counter(gb.timer, tick_func);
 
-    ppu_dot_state_machine(gb);
-}
-
-void t_cycle_tick(GameBoy& gb, Byte count) {
-    for(auto i = 0; i < count; ++i) {
-        t_cycle_tick(gb);
+    for(auto i = 0; i < 4; ++i) {
+        ppu_dot_state_machine(gb);
     }
-}
-
-void m_cycle_tick(GameBoy& gb) {
-    // 1 m_cycle_tick = 4 t_cycle_tick
-    t_cycle_tick(gb, 4);
 }
 
 

@@ -11,12 +11,15 @@ namespace GB {
 
 struct GameBoy {
     Cartridge cart;
-    PPU ppu;
+    PPU_Data ppu;
     Timer timer;
     Interrupt interrupt;
     std::array<Byte, 0x2000> vram;
     std::array<Byte, 0x1000> main_wram;
     std::array<Byte, 0x1000> banked_wram;
+
+    std::array<Byte, 0xa0> oam;
+
     std::array<Byte, 0x7f> hram;
 
     std::array<Byte, 0xffff> memory_map;

@@ -18,7 +18,7 @@ int main(int argc, char ** argv) {
         
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
-        Frontend ctx(GB_Width * 2, GB_Height * 2);
+        Frontend ctx(GB_Width, GB_Height);
 
         bool running = true;
         GB::GameBoy device(game, [&](FrameBuffer& buf) {

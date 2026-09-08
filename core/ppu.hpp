@@ -22,10 +22,16 @@ struct PPU_State {
     std::array<OAM_Entry, 10> oam_buffer;
 };
 
-struct PPU {
+struct PPU_Data {
     FrameBuffer buffer;
     FrameBufferCallback frame_buffer_callback;
     PPU_State state;
+    std::array<Byte, 0xa0> oam;
 }; 
+
+namespace PPU {
+    Byte read(PPU_Data& ppu, Address addr);
+    void write(PPU_Data& ppu, Address addr, Byte data);
+};
 
 void ppu_dot_state_machine(GB::GameBoy& gb);

@@ -28,6 +28,9 @@ Byte read(GameBoy& gb, Address addr) {
     else if(0xd000 <= addr && addr <= 0xdfff) {
         return gb.banked_wram[addr - 0xd000];
     }
+    else if(0xfe00 <= addr && addr <= 0xfe9f) {
+        return PPU::read(gb.ppu, addr);
+    }
     else if(0xff04 <= addr && addr <= 0xff07) {
         return TIMER::read(gb.timer, addr);
     }
@@ -75,6 +78,9 @@ void write(GameBoy& gb, Address addr, Byte data) {
     }
     else if(0xd000 <= addr && addr <= 0xdfff) {
         gb.banked_wram[addr - 0xd000] = data;
+    }
+    else if(0xfe00 <= addr && addr <= 0xfe9f) {
+        return PPU::write(gb.ppu, addr, data);
     }
     else if(addr == 0xff01) {
         std::cout << data;

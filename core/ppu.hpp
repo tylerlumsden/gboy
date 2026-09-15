@@ -8,6 +8,16 @@
 
 namespace GB { struct GameBoy; }
 
+struct LCD {
+    Byte control = 0x91;
+    Byte status;
+    Byte line_y = 0x00;
+    Byte line_y_compare = 0x00;
+    Byte scroll_y = 0x00;
+    Byte scroll_x = 0x00;
+    Byte background_palette = 0xfc;
+};
+
 enum PPU_Mode {
     HBLANK,
     VBLANK,
@@ -26,6 +36,7 @@ struct PPU_Data {
     FrameBuffer buffer;
     FrameBufferCallback frame_buffer_callback;
     PPU_State state;
+    LCD lcd;
     std::array<Byte, 0xa0> oam;
 }; 
 

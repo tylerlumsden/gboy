@@ -34,9 +34,8 @@ Byte read(GameBoy& gb, Address addr) {
     else if(0xff04 <= addr && addr <= 0xff07) {
         return TIMER::read(gb.timer, addr);
     }
-    else if(addr == 0xff44) {
-        // Placeholder for the LY until it gets implemented
-        return 0x90;
+    else if(0xff40 <= addr && addr <= 0xff4b) {
+        return PPU::read(gb.ppu, addr);
     }
     else if(addr == 0xff0f) {
         return gb.interrupt.interrupt_flag;
@@ -68,6 +67,7 @@ void write(GameBoy& gb, Address addr, Byte data) {
         CART::write(gb.cart, addr, data);
     }
     else if(0x8000 <= addr && addr <= 0x9fff) {
+        Log::log<Log::Level::Forced>("addr: {:#x}, {:#x}", addr, data);
         gb.vram[addr - 0x8000] = data;
     }
     else if(0xa000 <= addr && addr <= 0xbfff) {
@@ -80,7 +80,7 @@ void write(GameBoy& gb, Address addr, Byte data) {
         gb.banked_wram[addr - 0xd000] = data;
     }
     else if(0xfe00 <= addr && addr <= 0xfe9f) {
-        return PPU::write(gb.ppu, addr, data);
+        PPU::write(gb.ppu, addr, data);
     }
     else if(addr == 0xff01) {
         std::cout << data;
@@ -90,6 +90,9 @@ void write(GameBoy& gb, Address addr, Byte data) {
     }
     else if(addr == 0xff0f) {
         gb.interrupt.interrupt_flag = data;
+    }
+    else if(0xff40 <= addr && addr <= 0xff4b) {
+        PPU::write(gb.ppu, addr, data);
     }
     else if(0xff4c <= addr && addr <= 0xff4f) {
         // no-op, unimplemented range for the DMG

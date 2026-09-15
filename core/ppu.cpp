@@ -106,7 +106,7 @@ void draw_background_line(GameBoy& gb) {
         Byte low_data = memory_bus(gb, tile_address);
         Byte high_data = memory_bus(gb, tile_address + 1);
 
-        for(Byte pixel = 0; pixel < 8; ++pixel) {
+        for(int pixel = 7; pixel >= 0; --pixel) {
             if(0 <= render_x && render_x < 160) {
                 Byte color_id = ((high_data >> pixel) & 0x1) << 1 | ((low_data >> pixel) & 0x1);
 

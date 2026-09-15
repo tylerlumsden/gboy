@@ -12,7 +12,7 @@ GameBoy::GameBoy(Cartridge cartridge, FrameBufferCallback callback) : cart(cartr
 }
 
 Byte read(GameBoy& gb, Address addr) {
-    Log::log<Log::Level::Debug>("Reading from memory address {:#x}", addr);
+    Log::log<Log::Level::Verbose>("Reading from memory address {:#x}", addr);
     if(0x0 <= addr && addr <= 0x7fff) {
         return CART::read(gb.cart, addr);
     }
@@ -62,12 +62,11 @@ Byte read(GameBoy& gb, Address addr) {
 }
 
 void write(GameBoy& gb, Address addr, Byte data) {
-    Log::log<Log::Level::Debug>("Writing to memory address {:#x} with data {}", addr, data);
+    Log::log<Log::Level::Verbose>("Writing to memory address {:#x} with data {}", addr, data);
     if(0x0 <= addr && addr <= 0x7fff) {
         CART::write(gb.cart, addr, data);
     }
     else if(0x8000 <= addr && addr <= 0x9fff) {
-        Log::log<Log::Level::Forced>("addr: {:#x}, {:#x}", addr, data);
         gb.vram[addr - 0x8000] = data;
     }
     else if(0xa000 <= addr && addr <= 0xbfff) {

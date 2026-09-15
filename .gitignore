@@ -3,3 +3,6 @@ build/*
 *.gb
 *.dat
 *.log
+
+perf.data
+flame.svg

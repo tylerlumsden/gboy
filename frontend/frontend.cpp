@@ -2,9 +2,11 @@
 #include <SDL3/SDL_main.h>
 #include <array>
 #include <stdexcept>
+#include <iostream>
 
 #include "frontend.hpp"
 #include "event.hpp"
+#include "log.hpp"
 
 Frontend::Frontend() {
     SDL_Init(SDL_INIT_VIDEO);
@@ -73,8 +75,10 @@ std::vector<Event_Type> poll_events(Frontend& ctx) {
     SDL_Event e;
     while(SDL_PollEvent(&e)) {
         switch(e.type) {
+        case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         case SDL_EVENT_QUIT:
             events.push_back(Event_Type::QUIT);
+            break;
         }
     }
 

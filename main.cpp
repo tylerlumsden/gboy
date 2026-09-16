@@ -21,6 +21,10 @@ int main(int argc, char ** argv) {
         Frontend ctx;
         Window game_window = ctx.create_window(GB_Width, GB_Height, "game");
 
+        #ifndef NDEBUG
+        Window tile_window = ctx.create_window(Tilemap_Height, Tilemap_Width, "tiles");
+        #endif
+
         bool running = true;
         GB::GameBoy device(game, [&](FrameBuffer& buf) {
             if(!render_buffer(game_window, buf)) {

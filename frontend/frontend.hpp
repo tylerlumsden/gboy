@@ -8,14 +8,19 @@
 #include "data_types.hpp"
 #include "display.hpp"
 
-
-
-struct Frontend {
+struct Window {
+    std::string name;
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_Texture* buffer;
+};
 
-    Frontend(unsigned int width, unsigned int height);
+struct Frontend {
+    std::vector<Window> windows;
+
+    Window create_window(unsigned int width, unsigned int height, std::string name);
+
+    Frontend();
     ~Frontend();
 
     Frontend(const Frontend&) = delete;
@@ -23,6 +28,6 @@ struct Frontend {
 };
 
 
-bool render_buffer(Frontend& ctx, const FrameBuffer& frame_buffer);
+bool render_buffer(Window ctx, const FrameBuffer& frame_buffer);
 
 std::vector<Event_Type> poll_events(Frontend& ctx);

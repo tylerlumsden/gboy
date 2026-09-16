@@ -18,11 +18,12 @@ int main(int argc, char ** argv) {
         
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
-        Frontend ctx(GB_Width, GB_Height);
+        Frontend ctx;
+        Window game_window = ctx.create_window(GB_Width, GB_Height, "game");
 
         bool running = true;
         GB::GameBoy device(game, [&](FrameBuffer& buf) {
-            if(!render_buffer(ctx, buf)) {
+            if(!render_buffer(game_window, buf)) {
                 throw std::runtime_error("Unable to render buffer");
             };
             for(Event_Type event : poll_events(ctx)) {

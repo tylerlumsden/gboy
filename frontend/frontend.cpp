@@ -6,40 +6,52 @@
 #include "frontend.hpp"
 #include "event.hpp"
 
-Frontend::Frontend(unsigned int width, unsigned int height) {
+Frontend::Frontend() {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+}
+
+Window Frontend::create_window(unsigned int width, unsigned int height, std::string name) {
+
+    Window new_window;
+
+    new_window.name = name;
 
     if(!SDL_CreateWindowAndRenderer(
-        "Window", 
+        name.c_str(), 
         width, height, 
         0, 
-        &this->window, 
-        &this->renderer)) {
+        &new_window.window, 
+        &new_window.renderer)) {
             throw std::runtime_error("Unable to allocate SDL window and renderer");
-        }
+    }
     
-    this->buffer = SDL_CreateTexture(
-        this->renderer, 
+    new_window.buffer = SDL_CreateTexture(
+        new_window.renderer, 
         SDL_PIXELFORMAT_ARGB8888, 
         SDL_TEXTUREACCESS_STREAMING, 
         GB_Width,
         GB_Height
     );
 
-    if(!buffer) {
+    if(!new_window.buffer) {
         throw std::runtime_error("Unable to allocate SDL texture");
     }
+
+    return new_window;
 }
 
 Frontend::~Frontend() {
-    SDL_DestroyWindow(this->window);
-    SDL_DestroyRenderer(this->renderer);
-    SDL_DestroyTexture(this->buffer);
+    for(Window window : windows) {
+        SDL_DestroyWindow(window.window);
+        SDL_DestroyRenderer(window.renderer);
+        SDL_DestroyTexture(window.buffer);
+    }
+
     SDL_Quit();
 }
 
-bool render_buffer(Frontend& ctx, const FrameBuffer& frame_buffer) {
+bool render_buffer(Window ctx, const FrameBuffer& frame_buffer) {
     if(!SDL_UpdateTexture(ctx.buffer, NULL, frame_buffer.data(), GB_Width * sizeof(Quad_Byte))) {
         return false;
     }

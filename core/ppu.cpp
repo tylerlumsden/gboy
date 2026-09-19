@@ -111,7 +111,7 @@ void draw_background_line(GameBoy& gb) {
 
     Byte line_y = (gb.ppu.lcd.line_y + gb.ppu.lcd.scroll_y) % 256;
     Byte tile_row = (line_y % 8) * 2;
-    Byte map_row = (line_y / 8) * 32;
+    Double_Byte map_row = (line_y / 8) * 32;
 
     Byte line_x = gb.ppu.lcd.scroll_x;
     Byte render_x = -(line_x % 8);

@@ -46,3 +46,5 @@ namespace PPU {
 };
 
 void ppu_dot_state_machine(GB::GameBoy& gb);
+
+void debug_render_tileset(GB::GameBoy& gb, TilemapBuffer& buffer);

@@ -13,6 +13,9 @@ struct Window {
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_Texture* buffer;
+
+    unsigned int width;
+    unsigned int height;
 };
 
 struct Frontend {
@@ -28,6 +31,6 @@ struct Frontend {
 };
 
 
-bool render_buffer(Window ctx, const FrameBuffer& frame_buffer);
+bool render_buffer(Window ctx, Buffer buf);
 
 std::vector<Event_Type> poll_events(Frontend& ctx);

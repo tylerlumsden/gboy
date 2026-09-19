@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <functional>
+#include <span>
 
 #include "data_types.hpp"
 
@@ -9,6 +10,10 @@ inline constexpr Byte GB_Height = 144;
 
 inline constexpr unsigned int Tilemap_Width = 256;
 inline constexpr unsigned int Tilemap_Height = 256;
+
+using Buffer = std::span<const Quad_Byte>;
+
+using TilemapBuffer = std::array<Quad_Byte, Tilemap_Width * Tilemap_Height>;
 
 using FrameBuffer = std::array<Quad_Byte, GB_Width * GB_Height>;
 using FrameBufferCallback = std::function<void(FrameBuffer&)>;

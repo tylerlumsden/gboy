@@ -18,6 +18,8 @@ Window Frontend::create_window(unsigned int width, unsigned int height, std::str
     Window new_window;
 
     new_window.name = name;
+    new_window.height = height;
+    new_window.width = width;
 
     if(!SDL_CreateWindowAndRenderer(
         name.c_str(), 
@@ -32,8 +34,8 @@ Window Frontend::create_window(unsigned int width, unsigned int height, std::str
         new_window.renderer, 
         SDL_PIXELFORMAT_ARGB8888, 
         SDL_TEXTUREACCESS_STREAMING, 
-        GB_Width,
-        GB_Height
+        width,
+        height
     );
 
     if(!new_window.buffer) {
@@ -53,8 +55,8 @@ Frontend::~Frontend() {
     SDL_Quit();
 }
 
-bool render_buffer(Window ctx, const FrameBuffer& frame_buffer) {
-    if(!SDL_UpdateTexture(ctx.buffer, NULL, frame_buffer.data(), GB_Width * sizeof(Quad_Byte))) {
+bool render_buffer(Window ctx, Buffer buf) {
+    if(!SDL_UpdateTexture(ctx.buffer, NULL, buf.data(), ctx.width * sizeof(Quad_Byte))) {
         return false;
     }
     if(!SDL_RenderClear(ctx.renderer)) {

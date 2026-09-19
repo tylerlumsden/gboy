@@ -78,6 +78,28 @@ Quad_Byte background_color_map(Byte background_palette, Byte color_id) {
     }
 }
 
+void debug_render_tileset(GameBoy& gb, TilemapBuffer& buffer) {
+
+    for(Address index = 0x0; index <= 0x17ff; index += 16) {
+        for(int line = 0; line < 8; ++line) {
+            Address line_addr = 0x8000 + index + (line * 2);
+            Byte low_data = memory_bus(gb, line_addr);
+            Byte high_data = memory_bus(gb, line_addr + 1);
+            for(int pixel = 7; pixel >= 0; --pixel) {
+                Byte color_id = ((high_data >> pixel) & 0x1) << 1 | ((low_data >> pixel) & 0x1);
+                Quad_Byte color = background_color_map(gb.ppu.lcd.background_palette, color_id);
+
+                // index % 16 is the tile coordinate x * 8 is the pixel coordinate x
+                Byte coordinate_x = (index % 16) * 8  + pixel;
+                // (index / (16 * 32)) is the tile coordinate y + line is the pixel coordinate y
+                Byte coordinate_y = (index / (16 * 32) * 8) + line;
+
+                buffer[(coordinate_y * Tilemap_Width) + coordinate_x] = color;
+            }   
+        }
+    }
+}
+
 void draw_background_line(GameBoy& gb) {
     auto lcdc = bit_array(gb.ppu.lcd.control);
     Address map_offset = 0x9800;

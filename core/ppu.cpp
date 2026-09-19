@@ -89,10 +89,12 @@ void debug_render_tileset(GameBoy& gb, TilemapBuffer& buffer) {
                 Byte color_id = ((high_data >> pixel) & 0x1) << 1 | ((low_data >> pixel) & 0x1);
                 Quad_Byte color = background_color_map(gb.ppu.lcd.background_palette, color_id);
 
+                Quad_Byte tile_id = index / 16;
+
                 // index % 16 is the tile coordinate x * 8 is the pixel coordinate x
-                Byte coordinate_x = (index % 16) * 8  + pixel;
+                Quad_Byte coordinate_x = ((tile_id % 32) * 8) + (7 - pixel);
                 // (index / (16 * 32)) is the tile coordinate y + line is the pixel coordinate y
-                Byte coordinate_y = (index / (16 * 32) * 8) + line;
+                Quad_Byte coordinate_y = ((tile_id / 32) * 8) + line;
 
                 buffer[(coordinate_y * Tilemap_Width) + coordinate_x] = color;
             }   

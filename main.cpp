@@ -22,7 +22,7 @@ int main(int argc, char ** argv) {
         Window game_window = ctx.create_window(GB_Width, GB_Height, "game");
 
         #ifndef NDEBUG
-        Window tile_window = ctx.create_window(Tilemap_Height, Tilemap_Width, "tiles");\
+        Window tile_window = ctx.create_window(Tilemap_Width, Tilemap_Height, "tiles");\
         TilemapBuffer tilebuffer;
         #endif
 

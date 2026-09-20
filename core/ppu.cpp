@@ -179,19 +179,39 @@ void draw_background_line(GameBoy& gb) {
 
 void ppu_draw_line(GameBoy& gb) {
 
-    draw_background_line(gb);
+    if(get_bit(gb.ppu.lcd.control, 0)) {
+        draw_background_line(gb);
+    }
 
-    draw_oam_line(gb);    
+    if(get_bit(gb.ppu.lcd.control, 1)) {
+        draw_oam_line(gb);  
+    }   
 }
 
 void ppu_line_state_machine(GameBoy& gb) {
+    if(get_bit(gb.ppu.lcd.status, 6) && gb.ppu.lcd.line_y == gb.ppu.lcd.line_y_compare) {
+        request_lcd_interrupt(gb.interrupt);
+    }
+
+    if(get_bit(gb.ppu.lcd.status, 5)) {
+        request_lcd_interrupt(gb.interrupt);
+    }
+
     if(0 <= gb.ppu.lcd.line_y && gb.ppu.lcd.line_y <= 143) {
         ppu_draw_line(gb);
 
         if(gb.ppu.lcd.line_y == 143) {
             gb.ppu.frame_buffer_callback(gb.ppu.buffer);
+
             request_vblank_interrupt(gb.interrupt);
+            if(get_bit(gb.ppu.lcd.status, 4)) {
+                request_lcd_interrupt(gb.interrupt);
+            }
         }
+    }
+
+    if(get_bit(gb.ppu.lcd.status, 3)) {
+        request_lcd_interrupt(gb.interrupt);
     }
     
     if(gb.ppu.lcd.line_y == 153) {

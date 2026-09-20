@@ -10,7 +10,7 @@ namespace GB { struct GameBoy; }
 
 struct LCD {
     Byte control = 0x91;
-    Byte status;
+    Byte status = 0x85;
     Byte line_y = 0x00;
     Byte line_y_compare = 0x00;
     Byte scroll_y = 0x00;
@@ -18,16 +18,8 @@ struct LCD {
     Byte background_palette = 0xfc;
 };
 
-enum PPU_Mode {
-    HBLANK,
-    VBLANK,
-    OAM,
-    DRAW
-};
-
 using OAM_Entry = std::array<Byte, 4>;
 struct PPU_State {
-    PPU_Mode mode = PPU_Mode::OAM;
     Quad_Byte dots_elapsed = 0;
     std::array<OAM_Entry, 10> oam_buffer;
 };

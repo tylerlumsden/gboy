@@ -14,29 +14,10 @@ Double_Byte resolve_line_dots(Quad_Byte dots_elapsed) {
     return dots_elapsed % 456;
 }
 
-std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, Double_Byte line_y) {
-    // Loop through all entries in the OAM and record all collisions on the current line
-
-    std::array<OAM_Entry, 10> oam_buffer;
-    Byte oam_list_size = 0;
-
-    for(Address offset = 0; offset < 160 && oam_list_size < 10; offset += 4) {
-        // As per pandocs, the position is the actual position + 16
-        Byte oam_position_y = oam[offset] - 16;
-
-        // TODO: Get the tile height from the LCD
-        Byte tile_height = 8;
-        if(oam_position_y <= line_y && line_y <= oam_position_y + tile_height) {
-            Byte oam_position_x = oam[offset + 1];
-            Byte oam_tile_index = oam[offset + 2];
-            Byte oam_attribute = oam[offset + 3];
-
-            oam_buffer[oam_list_size] = {oam_position_y, oam_position_x, oam_tile_index, oam_attribute};
-            ++oam_list_size;
-        }
-    }
-
-    return {oam_buffer, oam_list_size};
+Byte pixel_data_to_color_id(Byte low_data, Byte high_data, Byte pixel_index) {
+    pixel_index = 7 - pixel_index;
+    Byte color_id = ((high_data >> pixel_index) & 0x1) << 1 | ((low_data >> pixel_index) & 0x1);
+    return color_id;
 }
 
 Quad_Byte background_color_map(Byte background_palette, Byte color_id) {
@@ -86,18 +67,69 @@ void debug_render_tileset(GameBoy& gb, TilemapBuffer& buffer) {
             Byte low_data = memory_bus(gb, line_addr);
             Byte high_data = memory_bus(gb, line_addr + 1);
             for(int pixel = 7; pixel >= 0; --pixel) {
-                Byte color_id = ((high_data >> pixel) & 0x1) << 1 | ((low_data >> pixel) & 0x1);
+                Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
                 Quad_Byte color = background_color_map(gb.ppu.lcd.background_palette, color_id);
 
                 Quad_Byte tile_id = index / 16;
 
                 // index % 16 is the tile coordinate x * 8 is the pixel coordinate x
-                Quad_Byte coordinate_x = ((tile_id % 32) * 8) + (7 - pixel);
+                Quad_Byte coordinate_x = ((tile_id % 32) * 8) + pixel;
                 // (index / (16 * 32)) is the tile coordinate y + line is the pixel coordinate y
                 Quad_Byte coordinate_y = ((tile_id / 32) * 8) + line;
 
                 buffer[(coordinate_y * Tilemap_Width) + coordinate_x] = color;
             }   
+        }
+    }
+}
+
+std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, Double_Byte line_y) {
+    // Loop through all entries in the OAM and record all collisions on the current line
+
+    std::array<OAM_Entry, 10> oam_buffer;
+    Byte oam_list_size = 0;
+
+    for(Address offset = 0; offset < 160 && oam_list_size < 10; offset += 4) {
+        // As per pandocs, the position is the actual position + 16
+        Byte oam_position_y = oam[offset] - 16;
+
+        // TODO: Get the tile height from the LCD
+        Byte tile_height = 8;
+        if(oam_position_y <= line_y && line_y <= oam_position_y + tile_height) {
+            Byte oam_position_x = oam[offset + 1];
+            Byte oam_tile_index = oam[offset + 2];
+            Byte oam_attribute = oam[offset + 3];
+
+            oam_buffer[oam_list_size] = {oam_position_y, oam_position_x, oam_tile_index, oam_attribute};
+            ++oam_list_size;
+        }
+    }
+
+    return {oam_buffer, oam_list_size};
+}
+
+void draw_oam_line(GameBoy& gb) {
+    auto [oam_buffer, oam_list_size] = oam_scan(gb.ppu.oam, gb.ppu.lcd.line_y);
+    for(Byte i = 0; i < oam_list_size; ++i) {
+        auto entry = oam_buffer[i];
+
+        // Need to bounds check the pixel_x here
+        Byte position_x = entry[1] - 8;
+        Byte position_y = entry[0] - 16; 
+        Byte tile_row = gb.ppu.lcd.line_y - position_y;
+
+        Address tile_index = 0x8000 + (entry[2] * 16) + (tile_row * 2);
+        
+        Byte low_data = memory_bus(gb, tile_index);
+        Byte high_data = memory_bus(gb, tile_index + 1);
+
+        for(int pixel = 0; pixel < 8; ++pixel) {
+            Quad_Byte horizontal_index = position_x + pixel;
+
+            Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
+            if(0 <= horizontal_index && horizontal_index <= GB_Width) {
+                gb.ppu.buffer[GB_Width * gb.ppu.lcd.line_y + horizontal_index] = background_color_map(gb.ppu.lcd.background_palette, color_id);
+            }
         }
     }
 }
@@ -130,9 +162,9 @@ void draw_background_line(GameBoy& gb) {
         Byte low_data = memory_bus(gb, tile_address);
         Byte high_data = memory_bus(gb, tile_address + 1);
 
-        for(int pixel = 7; pixel >= 0; --pixel) {
+        for(int pixel = 0; pixel < 8; ++pixel) {
             if(0 <= render_x && render_x < 160) {
-                Byte color_id = ((high_data >> pixel) & 0x1) << 1 | ((low_data >> pixel) & 0x1);
+                Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
 
                 Quad_Byte color = background_color_map(gb.ppu.lcd.background_palette, color_id);
                 gb.ppu.buffer[gb.ppu.lcd.line_y * GB_Width + render_x] = color;
@@ -147,17 +179,7 @@ void ppu_draw_line(GameBoy& gb) {
 
     draw_background_line(gb);
 
-    /*
-    auto [oam_buffer, oam_list_size] = oam_scan(gb.ppu.oam, gb.ppu.lcd.line_y);
-    for(Byte i = 0; i < oam_list_size; ++i) {
-        auto entry = oam_buffer[i];
-
-        // Need to bounds check the pixel_x here
-        Byte pixel_x = entry[1] - 8;
-        Quad_Byte pixel_index = (gb.ppu.lcd.line_y * GB_Width) + pixel_x;
-        gb.ppu.buffer[pixel_index] = 0xFF000000; // black pixel
-    }
-    */
+    draw_oam_line(gb);    
 }
 
 void ppu_line_state_machine(GameBoy& gb) {
@@ -213,6 +235,7 @@ namespace PPU {
             return ppu.lcd.background_palette;
         }
         else {
+            return 0;
             throw std::invalid_argument(std::format(
                 "PPU: Attempted to read address {:#x}. This address is either unimplemented or out of range.\n", addr
             ));
@@ -245,6 +268,7 @@ namespace PPU {
             ppu.lcd.background_palette = data;
         }
         else {
+            return;
             throw std::invalid_argument(std::format(
                 "PPU: Attempted to write to address {:#x}. This address is either unimplemented or out of range.\n", addr
             ));

@@ -83,7 +83,7 @@ void debug_render_tileset(GameBoy& gb, TilemapBuffer& buffer) {
     }
 }
 
-std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, Double_Byte line_y) {
+std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, Double_Byte line_y, Byte tile_height) {
     // Loop through all entries in the OAM and record all collisions on the current line
 
     std::array<OAM_Entry, 10> oam_buffer;
@@ -95,8 +95,6 @@ std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, 
 
         Byte position_y = oam_position_y - 16;
 
-        // TODO: Get the tile height from the LCD
-        Byte tile_height = 8;
         if(position_y <= line_y && line_y <= position_y + tile_height) {
             Byte oam_position_x = oam[offset + 1];
             Byte oam_tile_index = oam[offset + 2];
@@ -111,22 +109,42 @@ std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, 
 }
 
 void draw_oam_line(GameBoy& gb) {
-    auto [oam_buffer, oam_list_size] = oam_scan(gb.ppu.oam, gb.ppu.lcd.line_y);
+    Byte tile_height = 8;
+    if(get_bit(gb.ppu.lcd.control, 2)) {
+        tile_height = 16;
+    }
+    auto [oam_buffer, oam_list_size] = oam_scan(gb.ppu.oam, gb.ppu.lcd.line_y, tile_height);
     for(Byte i = 0; i < oam_list_size; ++i) {
         auto entry = oam_buffer[i];
 
         // Need to bounds check the pixel_x here
         Byte position_x = entry[1] - 8;
         Byte position_y = entry[0] - 16; 
+
+        bool y_flip = get_bit(entry[3], 6);
         Byte tile_row = gb.ppu.lcd.line_y - position_y;
+        if(y_flip) {
+            tile_row = tile_height - tile_row - 1;
+        }
 
-        Address tile_index = 0x8000 + (entry[2] * 16) + (tile_row * 2);
+        Address tile_index;
+        if(get_bit(gb.ppu.lcd.control, 2)) {
+            tile_index = (entry[2] & ~1) * 16;
+        } else {
+            tile_index = entry[2] * 16;
+        }
+
+        Address tile_addr = 0x8000 + tile_index + (tile_row * 2);
         
-        Byte low_data = memory_bus(gb, tile_index);
-        Byte high_data = memory_bus(gb, tile_index + 1);
+        Byte low_data = memory_bus(gb, tile_addr);
+        Byte high_data = memory_bus(gb, tile_addr + 1);
 
+        bool x_flip = get_bit(entry[3], 5);
         for(int pixel = 0; pixel < 8; ++pixel) {
             Quad_Byte horizontal_index = position_x + pixel;
+            if(x_flip) {
+                horizontal_index = 8 - horizontal_index - 1;
+            }
 
             Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
             if(0 <= horizontal_index && horizontal_index <= GB_Width) {
@@ -189,10 +207,6 @@ void ppu_draw_line(GameBoy& gb) {
 }
 
 void ppu_line_state_machine(GameBoy& gb) {
-    if(get_bit(gb.ppu.lcd.status, 6) && gb.ppu.lcd.line_y == gb.ppu.lcd.line_y_compare) {
-        request_lcd_interrupt(gb.interrupt);
-    }
-
     if(get_bit(gb.ppu.lcd.status, 5)) {
         request_lcd_interrupt(gb.interrupt);
     }
@@ -219,13 +233,21 @@ void ppu_line_state_machine(GameBoy& gb) {
     } else {
         gb.ppu.lcd.line_y += 1;
     }
+
+    if(get_bit(gb.ppu.lcd.status, 6) && gb.ppu.lcd.line_y == gb.ppu.lcd.line_y_compare) {
+        request_lcd_interrupt(gb.interrupt);
+    }
 }
 
 void ppu_dot_state_machine(GameBoy& gb) {
-    gb.ppu.state.dots_elapsed += 1;
-    if(gb.ppu.state.dots_elapsed == 456) {
+    if(gb.ppu.state.dots_elapsed == 0) {
         // draw line
         ppu_line_state_machine(gb);
+    }
+
+    gb.ppu.state.dots_elapsed += 1;
+
+    if(gb.ppu.state.dots_elapsed == 456) {
         gb.ppu.state.dots_elapsed = 0;
     }
 }

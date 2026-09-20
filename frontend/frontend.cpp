@@ -38,6 +38,8 @@ Window Frontend::create_window(unsigned int width, unsigned int height, std::str
         height
     );
 
+    SDL_SetTextureScaleMode(new_window.buffer, SDL_SCALEMODE_NEAREST);
+
     if(!new_window.buffer) {
         throw std::runtime_error("Unable to allocate SDL texture");
     }

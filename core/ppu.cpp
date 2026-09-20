@@ -91,11 +91,13 @@ std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, 
 
     for(Address offset = 0; offset < 160 && oam_list_size < 10; offset += 4) {
         // As per pandocs, the position is the actual position + 16
-        Byte oam_position_y = oam[offset] - 16;
+        Byte oam_position_y = oam[offset];
+
+        Byte position_y = oam_position_y - 16;
 
         // TODO: Get the tile height from the LCD
         Byte tile_height = 8;
-        if(oam_position_y <= line_y && line_y <= oam_position_y + tile_height) {
+        if(position_y <= line_y && line_y <= position_y + tile_height) {
             Byte oam_position_x = oam[offset + 1];
             Byte oam_tile_index = oam[offset + 2];
             Byte oam_attribute = oam[offset + 3];

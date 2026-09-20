@@ -20,24 +20,24 @@ Byte pixel_data_to_color_id(Byte low_data, Byte high_data, Byte pixel_index) {
     return color_id;
 }
 
-Quad_Byte background_color_map(Byte background_palette, Byte color_id) {
+Quad_Byte color_map(Byte palette, Byte color_id) {
     Byte shade;
     switch(color_id) {
     case 0:
-        shade = (background_palette & 0b11);
+        shade = (palette & 0b11);
         break;
     case 1:
-        shade = ((background_palette >> 2) & 0b11);
+        shade = ((palette >> 2) & 0b11);
         break;
     case 2:
-        shade = ((background_palette >> 4) & 0b11);
+        shade = ((palette >> 4) & 0b11);
         break;
     case 3:
-        shade = ((background_palette >> 6) & 0b11);
+        shade = ((palette >> 6) & 0b11);
         break;
     default:
         throw std::invalid_argument(
-            std::format("background_color_map: invalid color_id provided: {}", color_id)
+            std::format("color_map: invalid color_id provided: {}", color_id)
         );
     }
 
@@ -68,7 +68,7 @@ void debug_render_tileset(GameBoy& gb, TilemapBuffer& buffer) {
             Byte high_data = memory_bus(gb, line_addr + 1);
             for(int pixel = 7; pixel >= 0; --pixel) {
                 Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
-                Quad_Byte color = background_color_map(gb.ppu.lcd.background_palette, color_id);
+                Quad_Byte color = color_map(gb.ppu.lcd.background_palette, color_id);
 
                 Quad_Byte tile_id = index / 16;
 
@@ -140,6 +140,12 @@ void draw_oam_line(GameBoy& gb) {
         Byte high_data = memory_bus(gb, tile_addr + 1);
 
         bool x_flip = get_bit(entry[3], 5);
+        bool palette_mode = get_bit(entry[3], 4);
+        Byte palette = gb.ppu.lcd.object_palette1;
+        if(palette_mode) {
+            palette = gb.ppu.lcd.object_palette2;
+        }
+
         for(int pixel = 0; pixel < 8; ++pixel) {
             Quad_Byte horizontal_index = position_x + pixel;
             if(x_flip) {
@@ -147,8 +153,8 @@ void draw_oam_line(GameBoy& gb) {
             }
 
             Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
-            if(0 <= horizontal_index && horizontal_index <= GB_Width) {
-                gb.ppu.buffer[GB_Width * gb.ppu.lcd.line_y + horizontal_index] = background_color_map(gb.ppu.lcd.background_palette, color_id);
+            if(color_id != 0 && 0 <= horizontal_index && horizontal_index <= GB_Width) {
+                gb.ppu.buffer[GB_Width * gb.ppu.lcd.line_y + horizontal_index] = color_map(palette, color_id);
             }
         }
     }
@@ -186,7 +192,7 @@ void draw_background_line(GameBoy& gb) {
             if(0 <= render_x && render_x < 160) {
                 Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
 
-                Quad_Byte color = background_color_map(gb.ppu.lcd.background_palette, color_id);
+                Quad_Byte color = color_map(gb.ppu.lcd.background_palette, color_id);
                 gb.ppu.buffer[gb.ppu.lcd.line_y * GB_Width + render_x] = color;
             }
             render_x += 1;
@@ -202,7 +208,7 @@ void ppu_draw_line(GameBoy& gb) {
     }
 
     if(get_bit(gb.ppu.lcd.control, 1)) {
-        draw_oam_line(gb);  
+        //draw_oam_line(gb);  
     }   
 }
 
@@ -278,6 +284,12 @@ namespace PPU {
         else if(addr == 0xff47) {
             return ppu.lcd.background_palette;
         }
+        else if(addr == 0xff48) {
+            return ppu.lcd.object_palette1;
+        }
+        else if(addr == 0xff49) {
+            return ppu.lcd.object_palette2;
+        }
         else {
             return 0;
             throw std::invalid_argument(std::format(
@@ -310,6 +322,12 @@ namespace PPU {
         }
         else if(addr == 0xff47) {
             ppu.lcd.background_palette = data;
+        }
+        else if(addr == 0xff48) {
+            ppu.lcd.object_palette1 = data;
+        }
+        else if(addr == 0xff49) {
+            ppu.lcd.object_palette2 = data;
         }
         else {
             return;

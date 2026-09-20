@@ -16,6 +16,9 @@ struct LCD {
     Byte scroll_y = 0x00;
     Byte scroll_x = 0x00;
     Byte background_palette = 0xfc;
+
+    Byte object_palette1 = 0xfc;
+    Byte object_palette2 = 0xfc;
 };
 
 using OAM_Entry = std::array<Byte, 4>;

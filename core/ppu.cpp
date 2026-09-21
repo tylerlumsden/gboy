@@ -4,6 +4,9 @@
 
 #include "log.hpp"
 
+#include <tuple>
+#include <algorithm>
+
 using GB::GameBoy;
 
 Double_Byte resolve_line_y(Quad_Byte dots_elapsed) {
@@ -95,7 +98,7 @@ std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, 
 
         Byte position_y = oam_position_y - 16;
 
-        if(position_y <= line_y && line_y <= position_y + tile_height) {
+        if(position_y <= line_y && line_y < position_y + tile_height) {
             Byte oam_position_x = oam[offset + 1];
             Byte oam_tile_index = oam[offset + 2];
             Byte oam_attribute = oam[offset + 3];
@@ -108,16 +111,30 @@ std::pair<std::array<OAM_Entry, 10>, Byte> oam_scan(std::array<Byte, 0xa0> oam, 
     return {oam_buffer, oam_list_size};
 }
 
-void draw_oam_line(GameBoy& gb) {
+using Color_Line = std::array<Byte, GB_Width>;
+using Priority_List = std::array<bool, GB_Width>;
+using Palette_List = std::array<Byte, GB_Width>;
+std::tuple<Color_Line, Priority_List, Palette_List> draw_oam_line(GameBoy& gb) {
+    Color_Line line{};
+    Priority_List priority{};
+    Palette_List palettes{};
+
     Byte tile_height = 8;
     if(get_bit(gb.ppu.lcd.control, 2)) {
         tile_height = 16;
     }
     auto [oam_buffer, oam_list_size] = oam_scan(gb.ppu.oam, gb.ppu.lcd.line_y, tile_height);
-    for(Byte i = 0; i < oam_list_size; ++i) {
+
+    std::stable_sort(oam_buffer.begin(), oam_buffer.begin() + oam_list_size, 
+    [](const OAM_Entry& a, const OAM_Entry& b) {
+        return a[1] < b[1];
+    });
+
+    std::reverse(oam_buffer.begin(), oam_buffer.begin() + oam_list_size);
+
+    for(int i = 0; i < oam_list_size; ++i) {
         auto entry = oam_buffer[i];
 
-        // Need to bounds check the pixel_x here
         Byte position_x = entry[1] - 8;
         Byte position_y = entry[0] - 16; 
 
@@ -154,13 +171,19 @@ void draw_oam_line(GameBoy& gb) {
 
             Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
             if(color_id != 0 && 0 <= horizontal_index && horizontal_index <= GB_Width) {
-                gb.ppu.buffer[GB_Width * gb.ppu.lcd.line_y + horizontal_index] = color_map(palette, color_id);
+                line[horizontal_index] = color_id;
+                priority[horizontal_index] = get_bit(entry[3], 7);
+                palettes[horizontal_index] = palette;
             }
         }
     }
+
+    return {line, priority, palettes};
 }
 
-void draw_background_line(GameBoy& gb) {
+Color_Line draw_background_line(GameBoy& gb) {
+    Color_Line line;
+
     auto lcdc = bit_array(gb.ppu.lcd.control);
     Address map_offset = 0x9800;
     if(lcdc[3]) {
@@ -191,25 +214,47 @@ void draw_background_line(GameBoy& gb) {
         for(int pixel = 0; pixel < 8; ++pixel) {
             if(0 <= render_x && render_x < 160) {
                 Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
-
-                Quad_Byte color = color_map(gb.ppu.lcd.background_palette, color_id);
-                gb.ppu.buffer[gb.ppu.lcd.line_y * GB_Width + render_x] = color;
+                line[render_x] = color_id;
             }
             render_x += 1;
         }
         line_x += 8;
     }
+    return line;
 }
 
 void ppu_draw_line(GameBoy& gb) {
 
+    // Initializes all elements to color id zero
+    Color_Line bg_line{};
     if(get_bit(gb.ppu.lcd.control, 0)) {
-        draw_background_line(gb);
+        bg_line = draw_background_line(gb);
     }
 
+    // Initializes all elements to color id zero (transparent for obj)
+    Color_Line obj_line{};
+    Priority_List obj_priority{};
+    Palette_List obj_palettes{};
     if(get_bit(gb.ppu.lcd.control, 1)) {
-        draw_oam_line(gb);  
+        auto [line, priority, palettes] = draw_oam_line(gb);  
+        obj_line = line;
+        obj_priority = priority;
+        obj_palettes = palettes;
     }   
+
+    for(size_t i = 0; i < GB_Width; ++i) {
+        Quad_Byte color;
+
+        bool obj_has_priority = !(obj_priority[i] && bg_line[i] != 0); 
+        bool obj_not_transparent = (obj_line[i] != 0);
+        if(obj_not_transparent && obj_has_priority) {
+            color = color_map(obj_palettes[i], obj_line[i]);
+        } else {
+            color = color_map(gb.ppu.lcd.background_palette, bg_line[i]);
+        }
+
+        gb.ppu.buffer[gb.ppu.lcd.line_y * GB_Width + i] = color;
+    }
 }
 
 void ppu_line_state_machine(GameBoy& gb) {

@@ -50,6 +50,16 @@ constexpr bool get_bit(T data, Quad_Byte index) {
     return (data & (1 << index));
 }
 
+template<std::unsigned_integral T>
+constexpr T set_bit(T data, Quad_Byte index) {
+    return (data | (1 << index));
+}
+
+template<std::unsigned_integral T>
+constexpr T clear_bit(T data, Quad_Byte index) {
+    return (data & ~(1 << index));
+}
+
 template <std::same_as<Byte> T>
 inline Double_Byte splice(T high, T low) {
     return (high << 8) | low;

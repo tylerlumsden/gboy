@@ -182,7 +182,7 @@ void draw_background_line(GameBoy& gb) {
         if(lcdc[4]) {
             tile_address = 0x8000 + (tile_index * 16) + tile_row;
         } else {
-            tile_address = 0x9000 + static_cast<Signed_Byte>(tile_index * 16) + tile_row;
+            tile_address = 0x9000 + static_cast<Signed_Byte>(tile_index) * 16 + tile_row;
         }
 
         Byte low_data = memory_bus(gb, tile_address);
@@ -213,10 +213,6 @@ void ppu_draw_line(GameBoy& gb) {
 }
 
 void ppu_line_state_machine(GameBoy& gb) {
-    if(get_bit(gb.ppu.lcd.status, 5)) {
-        request_lcd_interrupt(gb.interrupt);
-    }
-
     if(0 <= gb.ppu.lcd.line_y && gb.ppu.lcd.line_y <= 143) {
         ppu_draw_line(gb);
 
@@ -224,37 +220,31 @@ void ppu_line_state_machine(GameBoy& gb) {
             gb.ppu.frame_buffer_callback(gb.ppu.buffer);
 
             request_vblank_interrupt(gb.interrupt);
-            if(get_bit(gb.ppu.lcd.status, 4)) {
-                request_lcd_interrupt(gb.interrupt);
-            }
         }
     }
 
-    if(get_bit(gb.ppu.lcd.status, 3)) {
-        request_lcd_interrupt(gb.interrupt);
-    }
-    
     if(gb.ppu.lcd.line_y == 153) {
         gb.ppu.lcd.line_y = 0;
     } else {
         gb.ppu.lcd.line_y += 1;
     }
-
-    if(get_bit(gb.ppu.lcd.status, 6) && gb.ppu.lcd.line_y == gb.ppu.lcd.line_y_compare) {
-        request_lcd_interrupt(gb.interrupt);
-    }
 }
 
 void ppu_dot_state_machine(GameBoy& gb) {
-    if(gb.ppu.state.dots_elapsed == 0) {
+    if(gb.ppu.state.dots_elapsed == 456) {
         // draw line
         ppu_line_state_machine(gb);
+
+        gb.ppu.state.dots_elapsed = 0;
+    } else {
+        gb.ppu.state.dots_elapsed += 1;
     }
 
-    gb.ppu.state.dots_elapsed += 1;
-
-    if(gb.ppu.state.dots_elapsed == 456) {
-        gb.ppu.state.dots_elapsed = 0;
+    if(!get_bit(gb.ppu.lcd.status, 2) && gb.ppu.lcd.line_y == gb.ppu.lcd.line_y_compare) {
+        gb.ppu.lcd.status = set_bit(gb.ppu.lcd.status, 2);
+        request_lcd_interrupt(gb.interrupt);
+    } else if(gb.ppu.lcd.line_y != gb.ppu.lcd.line_y_compare) {
+        gb.ppu.lcd.status = clear_bit(gb.ppu.lcd.status, 2);
     }
 }
 
@@ -306,7 +296,7 @@ namespace PPU {
             ppu.lcd.control = data;
         }
         else if(addr == 0xff41) {
-            ppu.lcd.status = data & 0b11111000;
+            ppu.lcd.status = (data & 0b11111000) | (ppu.lcd.status & 0b00000111);
         }
         else if(addr == 0xff42) {
             ppu.lcd.scroll_y = data;

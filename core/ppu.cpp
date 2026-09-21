@@ -132,6 +132,7 @@ std::tuple<Color_Line, Priority_List, Palette_List> draw_oam_line(GameBoy& gb) {
 
     std::reverse(oam_buffer.begin(), oam_buffer.begin() + oam_list_size);
 
+
     for(int i = 0; i < oam_list_size; ++i) {
         auto entry = oam_buffer[i];
 
@@ -166,7 +167,7 @@ std::tuple<Color_Line, Priority_List, Palette_List> draw_oam_line(GameBoy& gb) {
         for(int pixel = 0; pixel < 8; ++pixel) {
             Quad_Byte horizontal_index = position_x + pixel;
             if(x_flip) {
-                horizontal_index = 8 - horizontal_index - 1;
+                horizontal_index = position_x + (8 - pixel - 1);
             }
 
             Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);

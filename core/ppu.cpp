@@ -172,10 +172,10 @@ void draw_background_line(GameBoy& gb) {
     Double_Byte map_row = (line_y / 8) * 32;
 
     Byte line_x = gb.ppu.lcd.scroll_x;
-    Byte render_x = -(line_x % 8);
+    int render_x = -(line_x % 8);
 
     while(render_x < 160) {
-        Address map_address = map_offset + map_row + ((line_x / 8) % 256);
+        Address map_address = map_offset + map_row + (line_x / 8);
         Byte tile_index = memory_bus(gb, map_address);
 
         Address tile_address;
@@ -208,7 +208,7 @@ void ppu_draw_line(GameBoy& gb) {
     }
 
     if(get_bit(gb.ppu.lcd.control, 1)) {
-        //draw_oam_line(gb);  
+        draw_oam_line(gb);  
     }   
 }
 

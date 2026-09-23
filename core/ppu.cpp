@@ -395,7 +395,6 @@ namespace PPU {
             return ppu.lcd.window_x;
         }
         else {
-            return 0;
             throw std::invalid_argument(std::format(
                 "PPU: Attempted to read address {:#x}. This address is either unimplemented or out of range.\n", addr
             ));
@@ -440,7 +439,6 @@ namespace PPU {
             ppu.lcd.window_x = data;
         }
         else {
-            return;
             throw std::invalid_argument(std::format(
                 "PPU: Attempted to write to address {:#x}. This address is either unimplemented or out of range.\n", addr
             ));

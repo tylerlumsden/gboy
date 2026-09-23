@@ -303,7 +303,7 @@ void ppu_draw_line(GameBoy& gb) {
     for(size_t i = 0; i < GB_Width; ++i) {
         Quad_Byte color;
 
-        bool obj_has_priority = !(obj_priority[i] && bg_line[i] != 0); 
+        bool obj_has_priority = !(obj_priority[i] && (bg_line[i] != 0 || win_line[i] != 0)); 
         bool obj_not_transparent = (obj_line[i] != 0);
         if(obj_not_transparent && obj_has_priority) {
             color = color_map(obj_palettes[i], obj_line[i]);

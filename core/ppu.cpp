@@ -129,7 +129,6 @@ std::tuple<Color_Line, Priority_List, Palette_List> draw_oam_line(GameBoy& gb) {
     [](const OAM_Entry& a, const OAM_Entry& b) {
         return a[1] < b[1];
     });
-
     std::reverse(oam_buffer.begin(), oam_buffer.begin() + oam_list_size);
 
 
@@ -182,6 +181,55 @@ std::tuple<Color_Line, Priority_List, Palette_List> draw_oam_line(GameBoy& gb) {
     return {line, priority, palettes};
 }
 
+using Rendered_Line = std::array<bool, GB_Width>;
+std::pair<Color_Line, Rendered_Line> draw_window_line(GameBoy& gb) {
+    Color_Line line{};
+    Rendered_Line rendered{};
+
+    int render_x = gb.ppu.lcd.window_x - 7;
+    if(gb.ppu.lcd.line_y < gb.ppu.lcd.window_y || !(0 <= render_x && render_x < GB_Width)) {
+        return {line, rendered};
+    }
+
+    Byte render_y = gb.ppu.lcd.window_line_y;
+    Byte map_row = (render_y / 8);
+    Byte tile_row = (render_y % 8) * 2;
+
+    auto lcdc = bit_array(gb.ppu.lcd.control);
+    Address map_offset = 0x9800;
+    if(lcdc[6]) {
+        map_offset = 0x9c00;
+    }
+    
+    for(Byte map_column = 0; map_column < 32; ++map_column) {
+        Address map_address = map_offset + map_row * 32 + map_column;
+        Byte tile_index = memory_bus(gb, map_address);
+
+        Address tile_address;
+        if(lcdc[4]) {
+            tile_address = 0x8000 + (tile_index * 16) + tile_row;
+        } else {
+            tile_address = 0x9000 + static_cast<Signed_Byte>(tile_index) * 16 + tile_row;
+        }
+
+        Byte low_data = memory_bus(gb, tile_address);
+        Byte high_data = memory_bus(gb, tile_address + 1);
+
+        for(int pixel = 0; pixel < 8; ++pixel) {
+            if(0 <= render_x && render_x < GB_Width) {
+                Byte color_id = pixel_data_to_color_id(low_data, high_data, pixel);
+                line[render_x] = color_id;
+                rendered[render_x] = true;
+            }
+            render_x += 1;
+        }
+    }
+
+    gb.ppu.lcd.window_line_y += 1;
+
+    return {line, rendered};
+}
+
 Color_Line draw_background_line(GameBoy& gb) {
     Color_Line line;
 
@@ -232,6 +280,14 @@ void ppu_draw_line(GameBoy& gb) {
         bg_line = draw_background_line(gb);
     }
 
+    Color_Line win_line{};
+    Rendered_Line win_rendered{};
+    if(get_bit(gb.ppu.lcd.control, 5)) {
+        auto [line, rendered] = draw_window_line(gb);
+        win_rendered = rendered;
+        win_line = line;
+    }
+
     // Initializes all elements to color id zero (transparent for obj)
     Color_Line obj_line{};
     Priority_List obj_priority{};
@@ -242,6 +298,7 @@ void ppu_draw_line(GameBoy& gb) {
         obj_priority = priority;
         obj_palettes = palettes;
     }   
+    
 
     for(size_t i = 0; i < GB_Width; ++i) {
         Quad_Byte color;
@@ -251,7 +308,11 @@ void ppu_draw_line(GameBoy& gb) {
         if(obj_not_transparent && obj_has_priority) {
             color = color_map(obj_palettes[i], obj_line[i]);
         } else {
-            color = color_map(gb.ppu.lcd.background_palette, bg_line[i]);
+            if(win_rendered[i]) {
+                color = color_map(gb.ppu.lcd.background_palette, win_line[i]);
+            } else {
+                color = color_map(gb.ppu.lcd.background_palette, bg_line[i]);
+            }
         }
 
         gb.ppu.buffer[gb.ppu.lcd.line_y * GB_Width + i] = color;
@@ -271,6 +332,7 @@ void ppu_line_state_machine(GameBoy& gb) {
 
     if(gb.ppu.lcd.line_y == 153) {
         gb.ppu.lcd.line_y = 0;
+        gb.ppu.lcd.window_line_y = 0;
     } else {
         gb.ppu.lcd.line_y += 1;
     }
@@ -326,6 +388,12 @@ namespace PPU {
         else if(addr == 0xff49) {
             return ppu.lcd.object_palette2;
         }
+        else if(addr == 0xff4a) {
+            return ppu.lcd.window_y;
+        }
+        else if(addr == 0xff4b) {
+            return ppu.lcd.window_x;
+        }
         else {
             return 0;
             throw std::invalid_argument(std::format(
@@ -364,6 +432,12 @@ namespace PPU {
         }
         else if(addr == 0xff49) {
             ppu.lcd.object_palette2 = data;
+        }
+        else if(addr == 0xff4a) {
+            ppu.lcd.window_y = data;
+        }
+        else if(addr == 0xff4b) {
+            ppu.lcd.window_x = data;
         }
         else {
             return;

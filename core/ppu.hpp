@@ -19,6 +19,10 @@ struct LCD {
 
     Byte object_palette1 = 0xfc;
     Byte object_palette2 = 0xfc;
+
+    Byte window_line_y = 0;
+    Byte window_y = 0;
+    Byte window_x = 7;
 };
 
 using OAM_Entry = std::array<Byte, 4>;

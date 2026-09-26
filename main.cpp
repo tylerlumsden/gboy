@@ -19,7 +19,7 @@ int main(int argc, char ** argv) {
         write_as_hex(game.rom.data, std::ofstream("resources/test.dat"));
 
         Frontend ctx;
-        Window game_window = ctx.create_window(GB_Width, GB_Height, "game");
+        Window game_window = ctx.create_window(GB_Width, GB_Height, "gboy");
 
         #ifndef NDEBUG
         Window tile_window = ctx.create_window(Tilemap_Width, Tilemap_Height, "tiles");\

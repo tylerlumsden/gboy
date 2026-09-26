@@ -442,7 +442,7 @@ namespace PPU {
         }
         else if(addr == 0xff46) {
             ppu.state.dma_state.ticks_left = 160;
-            ppu.state.dma_state.address_offset = (data << 2);
+            ppu.state.dma_state.address_offset = (data * 0x100);
         }
         else if(addr == 0xff47) {
             ppu.lcd.background_palette = data;

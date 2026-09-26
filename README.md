@@ -2,7 +2,8 @@
 
 Game Boy emulator written in modern C++20 with reasonably clean code in mind
 - SM83 emulated core that passes all Blargg's reference cpu_instrs tests
-- Working interrupts, ROM banking, and timer. (Display/PPU are WIP)
+- Working interrupts, ROM banking, and timer. PPU passes dmg-acid2 test.
+- Both Super Mario Land and Tetris playable.
 - Experimental conveniences like zero-cost logging, and compile-time instruction specialization
 
 ## Build and Run

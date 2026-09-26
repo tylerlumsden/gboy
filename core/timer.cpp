@@ -71,6 +71,8 @@ void m_cycle_tick(GameBoy& gb) {
     if(gb.ppu.state.dma_state.ticks_left > 0) {
         Byte offset = 160 - gb.ppu.state.dma_state.ticks_left;
         gb.ppu.oam[offset] = memory_bus(gb, gb.ppu.state.dma_state.address_offset + offset); 
+
+        --gb.ppu.state.dma_state.ticks_left;
     }
 
     for(auto i = 0; i < 4; ++i) {

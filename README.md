@@ -6,6 +6,9 @@ Game Boy emulator written in modern C++20 with reasonably clean code in mind
 - Both Super Mario Land and Tetris playable.
 - Experimental conveniences like zero-cost logging, and compile-time instruction specialization
 
+<img width="168" height="178" alt="image" src="https://github.com/user-attachments/assets/e3bf91c0-35f0-4245-bf7b-8f2fb4d8e66c" />
+
+
 ## Build and Run
 
 ### Requirements:

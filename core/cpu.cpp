@@ -1206,6 +1206,7 @@ const std::array<InstructionFunc, 256> instruction_handler = {
 
 } // anonymous namespace
 
+/*
 void log_debug_state(GameBoy& gb) {
     Log::log<Log::Level::Doctor>(R"(A:{:02x} F:{:02x} B:{:02x} C:{:02x} D:{:02x} E:{:02x} H:{:02x} L:{:02x} SP:{:04x} PC:{:04x} PCMEM:{:02x},{:02x},{:02x},{:02x})",
         gb.processor.A, flags_as_byte(gb), gb.processor.B, gb.processor.C, gb.processor.D,
@@ -1214,6 +1215,7 @@ void log_debug_state(GameBoy& gb) {
         static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 2)), static_cast<Byte>(memory_bus(gb, gb.processor.program_counter + 3))
     );
 }
+*/
 
 void poll_and_handle_interrupts(GameBoy& gb) {
 
@@ -1263,7 +1265,7 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
     
     poll_and_handle_interrupts(gb);
     if(!gb.processor.halt_mode) {
-        log_debug_state(gb);
+        //log_debug_state(gb);
         Log::log<Log::Level::Verbose>("Instruction Address {:#x}, ", gb.processor.program_counter);
 
         Byte next_instruction = fetch(gb);
@@ -1271,10 +1273,12 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
         std::invoke(instruction_handler[next_instruction], gb);
         Log::log<Log::Level::Verbose>("End instruction loop\n");
 
+        Log::log<Log::Level::Debug>("Joypad state: {:#b}", gb.joypad.joypad_register);
         Log::log<Log::Level::Verbose>("{}", gb.processor);
         Log::log<Log::Level::Verbose>("{}", gb.timer);
         Log::log<Log::Level::Verbose>("{}", gb.interrupt);
     } else {
+        Log::log<Log::Level::Debug>("Gameboy is halted");
         m_cycle_tick(gb);
     }
 }

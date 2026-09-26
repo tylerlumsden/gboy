@@ -40,10 +40,36 @@ int main(int argc, char ** argv) {
                 throw std::runtime_error("Unable to render buffer");
             };
 
+            JOY::clear_all(device.joypad);
             for(Event_Type event : poll_events(ctx)) {
                 switch(event) {
                 case(Event_Type::QUIT):
                     running = false;
+                    break;
+                case(Event_Type::DPAD_UP):
+                    JOY::up(device.joypad);
+                    break;
+                case(Event_Type::DPAD_DOWN):
+                    JOY::down(device.joypad);
+                    break;
+                case(Event_Type::DPAD_LEFT):
+                    JOY::left(device.joypad);
+                    break;
+                case(Event_Type::DPAD_RIGHT):
+                    JOY::right(device.joypad);
+                    break;
+                case(Event_Type::A):
+                    JOY::a(device.joypad);
+                    break;
+                case(Event_Type::B):
+                    JOY::b(device.joypad);
+                    break;
+                case(Event_Type::SELECT):
+                    JOY::select(device.joypad);
+                    break;
+                case(Event_Type::START):
+                    JOY::start(device.joypad);
+                    break;
                 }
             }
         });

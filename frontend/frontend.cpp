@@ -73,6 +73,49 @@ bool render_buffer(Window ctx, Buffer buf) {
     return true;
 }
 
+void resolve_keyboard(std::vector<Event_Type>& event_buffer) {
+    const bool *keys = SDL_GetKeyboardState(NULL);
+    if(keys[SDL_SCANCODE_LEFT]) {
+        Log::log<Log::Level::Debug>("EVENT: DPAD_LEFT");
+        event_buffer.push_back(Event_Type::DPAD_LEFT);
+    }
+
+    if(keys[SDL_SCANCODE_RIGHT]) {
+        Log::log<Log::Level::Debug>("EVENT: DPAD_RIGHT");
+        event_buffer.push_back(Event_Type::DPAD_RIGHT);
+    }
+
+    if(keys[SDL_SCANCODE_UP]) {
+        Log::log<Log::Level::Debug>("EVENT: DPAD_UP");
+        event_buffer.push_back(Event_Type::DPAD_UP);
+    }
+
+    if(keys[SDL_SCANCODE_DOWN]) {
+        Log::log<Log::Level::Debug>("EVENT: DPAD_DOWN");
+        event_buffer.push_back(Event_Type::DPAD_DOWN);
+    }
+
+    if(keys[SDL_SCANCODE_Z]) {
+        Log::log<Log::Level::Debug>("EVENT: JOY_A");
+        event_buffer.push_back(Event_Type::A);
+    }
+
+    if(keys[SDL_SCANCODE_X]) {
+        Log::log<Log::Level::Debug>("EVENT: JOY_B");
+        event_buffer.push_back(Event_Type::B);
+    }
+
+    if(keys[SDL_SCANCODE_RSHIFT]) {
+        Log::log<Log::Level::Debug>("EVENT: JOY_SELECT");
+        event_buffer.push_back(Event_Type::SELECT);
+    }
+    
+    if(keys[SDL_SCANCODE_RCTRL]) {
+        Log::log<Log::Level::Debug>("EVENT: JOY_START");
+        event_buffer.push_back(Event_Type::START);
+    }
+}
+
 std::vector<Event_Type> poll_events(Frontend& ctx) {
     std::vector<Event_Type> events;
 
@@ -85,6 +128,8 @@ std::vector<Event_Type> poll_events(Frontend& ctx) {
             break;
         }
     }
+
+    resolve_keyboard(events);
 
     return events;
 }

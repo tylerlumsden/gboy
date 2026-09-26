@@ -379,6 +379,10 @@ namespace PPU {
         else if(addr == 0xff45) {
             return ppu.lcd.line_y_compare;
         }
+        else if(addr == 0xff46) {
+            // Placeholder value, OAM DMA is write-only
+            return 0xff;
+        }
         else if(addr == 0xff47) {
             return ppu.lcd.background_palette;
         }
@@ -422,6 +426,10 @@ namespace PPU {
         }
         else if(addr == 0xff45) {
             ppu.lcd.line_y_compare = data;
+        }
+        else if(addr == 0xff46) {
+            ppu.state.dma_state.ticks_left = 160;
+            ppu.state.dma_state.address_offset = (data << 2);
         }
         else if(addr == 0xff47) {
             ppu.lcd.background_palette = data;

@@ -3,6 +3,7 @@
 
 #include "timer.hpp"
 #include "ppu.hpp"
+#include "memory.hpp"
 #include "gameboy.hpp"
 
 using GB::GameBoy;
@@ -66,6 +67,11 @@ void m_cycle_tick(GameBoy& gb) {
         }
     };
     check_and_trigger_counter(gb.timer, tick_func);
+
+    if(gb.ppu.state.dma_state.ticks_left > 0) {
+        Byte offset = 160 - gb.ppu.state.dma_state.ticks_left;
+        gb.ppu.oam[offset] = memory_bus(gb, gb.ppu.state.dma_state.address_offset + offset); 
+    }
 
     for(auto i = 0; i < 4; ++i) {
         ppu_dot_state_machine(gb);

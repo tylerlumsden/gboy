@@ -25,10 +25,16 @@ struct LCD {
     Byte window_x = 7;
 };
 
+struct DMA_State {
+    Byte ticks_left = 0;
+    Address address_offset = 0;
+};
+
 using OAM_Entry = std::array<Byte, 4>;
 struct PPU_State {
     Quad_Byte dots_elapsed = 0;
     std::array<OAM_Entry, 10> oam_buffer;
+    DMA_State dma_state; 
 };
 
 struct PPU_Data {

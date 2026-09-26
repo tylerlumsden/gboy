@@ -6,6 +6,7 @@
 #include "timer.hpp"
 #include "interrupt.hpp"
 #include "data_types.hpp"
+#include "joypad.hpp"
 
 namespace GB {
 
@@ -14,6 +15,7 @@ struct GameBoy {
     PPU_Data ppu;
     Timer timer;
     Interrupt interrupt;
+    Joypad joypad;
     std::array<Byte, 0x2000> vram;
     std::array<Byte, 0x1000> main_wram;
     std::array<Byte, 0x1000> banked_wram;

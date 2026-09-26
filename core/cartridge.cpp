@@ -132,7 +132,7 @@ Byte read_func(CartridgeType& cartridge, Address addr) {
 
         resolved_address = chop_least(resolved_address, 14 + std::bit_width(cartridge.rom.num_banks - 1));
 
-        Log::log<Log::Level::Debug>("Cartridge: Cartridge read returned resolved ROM address {:#x}", resolved_address);  
+        Log::log<Log::Level::Verbose>("Cartridge: Cartridge read returned resolved ROM address {:#x}", resolved_address);  
         return cartridge.rom.data.at(resolved_address);
     }
     else if(0xa000 <= addr && addr <= 0xbfff) {

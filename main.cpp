@@ -47,28 +47,28 @@ int main(int argc, char ** argv) {
                     running = false;
                     break;
                 case(Event_Type::DPAD_UP):
-                    JOY::up(device.joypad);
+                    JOY::up(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::DPAD_DOWN):
-                    JOY::down(device.joypad);
+                    JOY::down(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::DPAD_LEFT):
-                    JOY::left(device.joypad);
+                    JOY::left(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::DPAD_RIGHT):
-                    JOY::right(device.joypad);
+                    JOY::right(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::A):
-                    JOY::a(device.joypad);
+                    JOY::a(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::B):
-                    JOY::b(device.joypad);
+                    JOY::b(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::SELECT):
-                    JOY::select(device.joypad);
+                    JOY::select(device.joypad, device.interrupt);
                     break;
                 case(Event_Type::START):
-                    JOY::start(device.joypad);
+                    JOY::start(device.joypad, device.interrupt);
                     break;
                 }
             }

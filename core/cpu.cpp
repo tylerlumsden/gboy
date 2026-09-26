@@ -1272,8 +1272,6 @@ void SM83::fetch_decode_execute(GameBoy& gb) {
 
         std::invoke(instruction_handler[next_instruction], gb);
         Log::log<Log::Level::Verbose>("End instruction loop\n");
-
-        Log::log<Log::Level::Debug>("Joypad state: {:#b}", gb.joypad.joypad_register);
         Log::log<Log::Level::Verbose>("{}", gb.processor);
         Log::log<Log::Level::Verbose>("{}", gb.timer);
         Log::log<Log::Level::Verbose>("{}", gb.interrupt);

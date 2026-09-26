@@ -348,6 +348,19 @@ void ppu_dot_state_machine(GameBoy& gb) {
         gb.ppu.state.dots_elapsed += 1;
     }
 
+    // STAT mode flag (bits 0-1): 2 = OAM scan, 3 = drawing, 0 = HBlank, 1 = VBlank
+    Byte mode;
+    if(gb.ppu.lcd.line_y >= 144) {
+        mode = 1;
+    } else if(gb.ppu.state.dots_elapsed < 80) {
+        mode = 2;
+    } else if(gb.ppu.state.dots_elapsed < 252) {
+        mode = 3;
+    } else {
+        mode = 0;
+    }
+    gb.ppu.lcd.status = (gb.ppu.lcd.status & 0b11111100) | mode;
+
     if(!get_bit(gb.ppu.lcd.status, 2) && gb.ppu.lcd.line_y == gb.ppu.lcd.line_y_compare) {
         gb.ppu.lcd.status = set_bit(gb.ppu.lcd.status, 2);
         request_lcd_interrupt(gb.interrupt);

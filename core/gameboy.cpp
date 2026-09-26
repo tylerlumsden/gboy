@@ -32,7 +32,7 @@ Byte read(GameBoy& gb, Address addr) {
         return PPU::read(gb.ppu, addr);
     }
     else if(addr == 0xff00) {
-        return gb.joypad.joypad_register;
+        return JOY::read(gb.joypad);
     }
     else if(0xff04 <= addr && addr <= 0xff07) {
         return TIMER::read(gb.timer, addr);
